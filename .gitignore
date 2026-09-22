@@ -1,0 +1,6 @@
+.env
+aishu.db
+__pycache__/
+*.py[cod]
+.venv/
+venv/
