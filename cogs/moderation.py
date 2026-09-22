@@ -10,14 +10,18 @@ from utils.database import (
 async def send_modlog(guild: discord.Guild, title: str, description: str, color: discord.Color):
     config = get_guild_config(guild.id)
     channel = guild.get_channel(config.get("modlog_channel_id") or 0)
-    if channel:
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=color,
-            timestamp=datetime.now(timezone.utc),
-        )
+    if not isinstance(channel, discord.TextChannel):
+        return
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=color,
+        timestamp=datetime.now(timezone.utc),
+    )
+    try:
         await channel.send(embed=embed)
+    except (discord.Forbidden, discord.HTTPException):
+        pass
 
 
 def can_act(moderator: discord.Member, target: discord.Member) -> tuple[bool, str]:
@@ -27,6 +31,11 @@ def can_act(moderator: discord.Member, target: discord.Member) -> tuple[bool, st
         return False, "You cannot moderate the server owner."
     if target.top_role >= moderator.top_role and moderator != moderator.guild.owner:
         return False, "That member has an equal or higher role than you."
+    bot_member = moderator.guild.me
+    if bot_member is None:
+        return False, "I am not ready to manage members in this server yet."
+    if target.top_role >= bot_member.top_role:
+        return False, "That member is at or above my highest role."
     return True, ""
 
 
@@ -35,6 +44,7 @@ class Moderation(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="warn", description="Warn a member")
+    @app_commands.guild_only()
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.describe(user="Member to warn", reason="Reason for the warning")
     async def warn(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
@@ -55,6 +65,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"Warned {user.mention}. Warning #{warning_id}.", ephemeral=True)
 
     @app_commands.command(name="warnings", description="View a member's warnings")
+    @app_commands.guild_only()
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.describe(user="Member whose warnings you want to view")
     async def warnings(self, interaction: discord.Interaction, user: discord.Member):
@@ -71,6 +82,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="clearwarnings", description="Clear all warnings for a member")
+    @app_commands.guild_only()
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(user="Member whose warnings should be cleared")
     async def clearwarnings(self, interaction: discord.Interaction, user: discord.Member):
@@ -84,6 +96,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"Cleared {count} warning(s) for {user.mention}.", ephemeral=True)
 
     @app_commands.command(name="timeout", description="Timeout a member")
+    @app_commands.guild_only()
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.describe(user="Member to timeout", minutes="Timeout duration in minutes", reason="Reason")
     async def timeout(self, interaction: discord.Interaction, user: discord.Member, minutes: app_commands.Range[int, 1, 40320], reason: str = "No reason provided"):
@@ -103,11 +116,17 @@ class Moderation(commands.Cog):
     @app_commands.command(name="untimeout", description="Remove a member's timeout")
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.describe(user="Member whose timeout should be removed")
+    @app_commands.guild_only()
     async def untimeout(self, interaction: discord.Interaction, user: discord.Member):
+        ok, error = can_act(interaction.user, user)
+        if not ok:
+            await interaction.response.send_message(error, ephemeral=True)
+            return
         await user.timeout(None, reason=f"Timeout removed by {interaction.user}")
         await interaction.response.send_message(f"Removed timeout from {user.mention}.", ephemeral=True)
 
     @app_commands.command(name="kick", description="Kick a member")
+    @app_commands.guild_only()
     @app_commands.default_permissions(kick_members=True)
     @app_commands.describe(user="Member to kick", reason="Reason")
     async def kick(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
@@ -120,6 +139,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"Kicked {user}.", ephemeral=True)
 
     @app_commands.command(name="ban", description="Ban a member")
+    @app_commands.guild_only()
     @app_commands.default_permissions(ban_members=True)
     @app_commands.describe(user="Member to ban", reason="Reason")
     async def ban(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
@@ -132,6 +152,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"Banned {user}.", ephemeral=True)
 
     @app_commands.command(name="unban", description="Unban a user by Discord ID")
+    @app_commands.guild_only()
     @app_commands.default_permissions(ban_members=True)
     @app_commands.describe(user_id="Discord user ID", reason="Reason")
     async def unban(self, interaction: discord.Interaction, user_id: str, reason: str = "No reason provided"):
@@ -148,6 +169,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"Unbanned {user}.", ephemeral=True)
 
     @app_commands.command(name="purge", description="Delete recent messages from the current channel")
+    @app_commands.guild_only()
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.describe(amount="Number of messages to delete")
     async def purge(self, interaction: discord.Interaction, amount: app_commands.Range[int, 1, 100]):
@@ -165,6 +187,7 @@ class Moderation(commands.Cog):
         await interaction.followup.send(f"Deleted {len(deleted)} message(s).", ephemeral=True)
 
     @app_commands.command(name="slowmode", description="Set the current channel slowmode")
+    @app_commands.guild_only()
     @app_commands.default_permissions(manage_channels=True)
     @app_commands.describe(seconds="Slowmode in seconds, 0 to disable")
     async def slowmode(self, interaction: discord.Interaction, seconds: app_commands.Range[int, 0, 21600]):
@@ -175,6 +198,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"Slowmode set to {seconds} second(s).", ephemeral=True)
 
     @app_commands.command(name="lock", description="Lock the current channel")
+    @app_commands.guild_only()
     @app_commands.default_permissions(manage_channels=True)
     async def lock(self, interaction: discord.Interaction):
         channel = interaction.channel
@@ -184,6 +208,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message("Channel locked.", ephemeral=False)
 
     @app_commands.command(name="unlock", description="Unlock the current channel")
+    @app_commands.guild_only()
     @app_commands.default_permissions(manage_channels=True)
     async def unlock(self, interaction: discord.Interaction):
         channel = interaction.channel
