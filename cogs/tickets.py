@@ -28,12 +28,16 @@ async def create_ticket(guild: discord.Guild, member: discord.Member):
             view_channel=True, send_messages=True, read_message_history=True
         )
 
-    channel = await category.create_text_channel(
-        name=f"ticket-{member.display_name.lower().replace(' ', '-')[:70]}",
-        overwrites=overwrites,
-        topic=f"aishu-ticket:{member.id}",
-        reason=f"Ticket opened by {member}",
-    )
+    safe_name = "-".join(member.display_name.lower().split())[:70] or "member"
+    try:
+        channel = await category.create_text_channel(
+            name=f"ticket-{safe_name}",
+            overwrites=overwrites,
+            topic=f"aishu-ticket:{member.id}",
+            reason=f"Ticket opened by {member}",
+        )
+    except (discord.Forbidden, discord.HTTPException):
+        return None, False
     return channel, True
 
 
@@ -77,6 +81,7 @@ class Ticket(commands.Cog):
         category="Category where ticket channels will be created",
         support_role="Role that can see tickets",
     )
+    @app_commands.guild_only()
     async def setup(
         self,
         interaction: discord.Interaction,
@@ -99,6 +104,7 @@ class Ticket(commands.Cog):
 
     @ticket.command(name="panel", description="Post the ticket creation panel")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def panel(self, interaction: discord.Interaction):
         config = get_guild_config(interaction.guild_id)
         if not config.get("ticket_category_id"):
@@ -112,6 +118,7 @@ class Ticket(commands.Cog):
         await interaction.response.send_message(embed=embed, view=TicketView())
 
     @ticket.command(name="close", description="Close the current ticket")
+    @app_commands.guild_only()
     async def close(self, interaction: discord.Interaction):
         channel = interaction.channel
         if (
@@ -137,6 +144,7 @@ class Ticket(commands.Cog):
         await channel.delete(reason=f"Ticket closed by {interaction.user}")
 
     @ticket.command(name="claim", description="Claim the current ticket")
+    @app_commands.guild_only()
     async def claim(self, interaction: discord.Interaction):
         if (
             not isinstance(interaction.channel, discord.TextChannel)
@@ -145,11 +153,20 @@ class Ticket(commands.Cog):
         ):
             await interaction.response.send_message("Use this inside a ticket.", ephemeral=True)
             return
+        config = get_guild_config(interaction.guild_id)
+        support_role = interaction.guild.get_role(config.get("ticket_support_role_id") or 0)
+        is_support = interaction.user.guild_permissions.manage_channels or (
+            support_role is not None and support_role in interaction.user.roles
+        )
+        if not is_support:
+            await interaction.response.send_message("You do not have permission to claim this ticket.", ephemeral=True)
+            return
         await interaction.channel.send(f"🎫 Ticket claimed by {interaction.user.mention}.")
         await interaction.response.send_message("Ticket claimed.", ephemeral=True)
 
     @ticket.command(name="rename", description="Rename the current ticket")
     @app_commands.describe(name="New channel name")
+    @app_commands.guild_only()
     async def rename(self, interaction: discord.Interaction, name: str):
         if (
             not isinstance(interaction.channel, discord.TextChannel)
@@ -167,6 +184,7 @@ class Ticket(commands.Cog):
 
     @ticket.command(name="add", description="Add a member to the current ticket")
     @app_commands.describe(user="Member to add")
+    @app_commands.guild_only()
     async def add(self, interaction: discord.Interaction, user: discord.Member):
         if (
             not isinstance(interaction.channel, discord.TextChannel)
@@ -187,6 +205,7 @@ class Ticket(commands.Cog):
 
     @ticket.command(name="remove", description="Remove a member from the current ticket")
     @app_commands.describe(user="Member to remove")
+    @app_commands.guild_only()
     async def remove(self, interaction: discord.Interaction, user: discord.Member):
         if (
             not isinstance(interaction.channel, discord.TextChannel)
