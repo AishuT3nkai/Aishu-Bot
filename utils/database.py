@@ -65,6 +65,13 @@ CREATE TABLE IF NOT EXISTS reports (
     status TEXT NOT NULL DEFAULT 'open',
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS birthdays (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    day INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id)
+);
 """
 
 def connect() -> sqlite3.Connection:
