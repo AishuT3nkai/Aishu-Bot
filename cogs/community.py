@@ -68,16 +68,15 @@ class SuggestionModal(discord.ui.Modal, title="Community Suggestion"):
 
 
 class ReportModal(discord.ui.Modal, title="Community Report"):
-    content = discord.ui.TextInput(
-        label="Report details",
-        placeholder="Describe the problem without sharing private information.",
-        style=discord.TextStyle.paragraph,
-        max_length=1500,
-    )
-
     def __init__(self, target_id: int | None):
         super().__init__(title="Community Report")
         self.target_id = target_id
+        self.content = discord.ui.TextInput(
+            label="Report details",
+            placeholder="Describe the problem without sharing private information.",
+            style=discord.TextStyle.paragraph,
+            max_length=1500,
+        )
         self.add_item(self.content)
 
     async def on_submit(self, interaction: discord.Interaction):
