@@ -75,11 +75,16 @@ class ReportModal(discord.ui.Modal, title="Community Report"):
         max_length=1500,
     )
 
+    def __init__(self, target_id: int | None):
+        super().__init__(title="Community Report")
+        self.target_id = target_id
+        self.add_item(self.content)
+
     async def on_submit(self, interaction: discord.Interaction):
         report_id = add_report(
             interaction.guild_id,
             interaction.user.id,
-            None,
+            self.target_id,
             self.content.value.strip(),
             datetime.now(timezone.utc).isoformat(),
         )
@@ -180,8 +185,9 @@ class Community(commands.Cog):
         await interaction.response.send_modal(SuggestionModal())
 
     @app_commands.command(name="report", description="Submit a private community report")
-    async def report(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(ReportModal())
+    @app_commands.describe(user="Optional member this report concerns")
+    async def report(self, interaction: discord.Interaction, user: discord.Member | None = None):
+        await interaction.response.send_modal(ReportModal(user.id if user else None))
 
 
 async def setup(bot: commands.Bot):
