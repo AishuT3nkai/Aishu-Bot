@@ -100,7 +100,7 @@ def update_guild_config(guild_id: int, **values: Any) -> None:
     allowed = {
         "welcome_channel_id", "goodbye_channel_id", "verification_channel_id",
         "verification_role_id", "unverified_role_id", "modlog_channel_id",
-        "suggestion_channel_id", "report_channel_id", "ticket_category_id",
+        "suggestion_channel_id", "report_channel_id", "birthday_channel_id", "ticket_category_id",
         "ticket_support_role_id", "autorole_id", "min_account_age_days",
         "verification_enabled", "welcome_enabled", "goodbye_enabled", "autorole_enabled",
     }
