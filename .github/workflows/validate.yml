@@ -17,3 +17,37 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compile Python
         run: python -m compileall -q .
+      - name: Import runtime modules
+        run: |
+          python - <<'PY'
+          import importlib
+
+          modules = [
+              "bot",
+              "utils.database",
+              "utils.language",
+              "cogs.community",
+              "cogs.moderation",
+              "cogs.server",
+              "cogs.verification",
+              "cogs.welcome",
+              "cogs.tickets",
+              "cogs.birthday",
+              "cogs.reviews",
+          ]
+          for module in modules:
+              importlib.import_module(module)
+              print(f"OK: {module}")
+
+          from utils import database
+          required = [
+              "set_birthday",
+              "remove_birthday",
+              "get_birthday",
+              "get_birthdays",
+              "set_report_status",
+          ]
+          for name in required:
+              assert hasattr(database, name), f"Missing database helper: {name}"
+          print("OK: database helpers")
+          PY
