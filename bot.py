@@ -21,9 +21,6 @@ EXTENSIONS = (
     "cogs.reviews",
 )
 
-if not TOKEN:
-    raise RuntimeError("DISCORD_TOKEN is missing from the environment.")
-
 
 class AishuBot(commands.Bot):
     def __init__(self):
