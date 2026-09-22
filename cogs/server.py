@@ -72,12 +72,10 @@ class Server(commands.Cog):
         guild = interaction.guild
         humans = sum(1 for member in guild.members if not member.bot)
         bots = sum(1 for member in guild.members if member.bot)
-        online = sum(1 for member in guild.members if member.status != discord.Status.offline)
         embed = discord.Embed(title=f"Server Stats — {guild.name}", color=discord.Color.blurple())
         embed.add_field(name="Members", value=str(guild.member_count or 0), inline=True)
         embed.add_field(name="Humans", value=str(humans), inline=True)
         embed.add_field(name="Bots", value=str(bots), inline=True)
-        embed.add_field(name="Online", value=str(online), inline=True)
         embed.add_field(name="Channels", value=str(len(guild.channels)), inline=True)
         embed.add_field(name="Roles", value=str(len(guild.roles)), inline=True)
         embed.add_field(name="Boosts", value=str(guild.premium_subscription_count), inline=True)
@@ -92,7 +90,7 @@ class Server(commands.Cog):
         )
         embed.add_field(name="Member", value="/introduce\n/profile\n/language\n/avatar\n/userinfo\n/serverinfo\n/stats\n/suggest\n/report\n/verify\n/verificationinfo", inline=False)
         embed.add_field(name="Moderation", value="/warn\n/warnings\n/clearwarnings\n/timeout\n/untimeout\n/kick\n/ban\n/unban\n/purge\n/slowmode\n/lock\n/unlock", inline=False)
-        embed.add_field(name="Setup", value="/config ...\n/welcome ...\n/goodbye ...\n/verification ...", inline=False)
+        embed.add_field(name="Setup", value="/config ...\n/welcome ...\n/goodbye ...\n/verification ...\n/ticket ...\n/birthday ...", inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
