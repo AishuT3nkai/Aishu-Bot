@@ -6,6 +6,10 @@ from utils.database import get_guild_config, update_guild_config, get_introducti
 
 
 async def run_verification(member: discord.Member, guild: discord.Guild) -> tuple[bool, str]:
+    bot_member = guild.me
+    if bot_member is None:
+        return False, "I am not ready to verify members in this server yet."
+
     config = get_guild_config(guild.id)
     if not config.get("verification_enabled"):
         return True, "Verification is currently disabled."
@@ -21,13 +25,13 @@ async def run_verification(member: discord.Member, guild: discord.Guild) -> tupl
     if role is None:
         return False, "Verification is not configured correctly: verification role is missing."
 
-    if role >= guild.me.top_role:
+    if role >= bot_member.top_role:
         return False, "I cannot assign the verification role because it is above my highest role."
 
     try:
         await member.add_roles(role, reason="Aishu verification")
         unverified = guild.get_role(config.get("unverified_role_id") or 0)
-        if unverified and unverified in member.roles and unverified < guild.me.top_role:
+        if unverified and unverified in member.roles and unverified < bot_member.top_role:
             await member.remove_roles(unverified, reason="Aishu verification")
     except discord.Forbidden:
         return False, "I do not have permission to update your roles."
@@ -66,6 +70,7 @@ class Verification(commands.Cog):
         minimum_account_age_days="Minimum Discord account age in days",
         enabled="Enable or disable verification",
     )
+    @app_commands.guild_only()
     async def setup(
         self,
         interaction: discord.Interaction,
@@ -74,10 +79,17 @@ class Verification(commands.Cog):
         minimum_account_age_days: app_commands.Range[int, 0, 3650] = 7,
         enabled: bool = True,
     ):
-        if verified_role >= interaction.guild.me.top_role:
+        bot_member = interaction.guild.me
+        if bot_member is None:
+            await interaction.response.send_message("I am not ready to configure roles in this server yet.", ephemeral=True)
+            return
+        if verified_role.is_default():
+            await interaction.response.send_message("The @everyone role cannot be the verified role.", ephemeral=True)
+            return
+        if verified_role >= bot_member.top_role:
             await interaction.response.send_message("The verified role must be below my highest role.", ephemeral=True)
             return
-        if unverified_role and unverified_role >= interaction.guild.me.top_role:
+        if unverified_role and (unverified_role.is_default() or unverified_role >= bot_member.top_role):
             await interaction.response.send_message("The unverified role must be below my highest role.", ephemeral=True)
             return
 
@@ -95,6 +107,7 @@ class Verification(commands.Cog):
 
     @verification.command(name="panel", description="Post the verification panel in this channel")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def panel(self, interaction: discord.Interaction):
         config = get_guild_config(interaction.guild_id)
         if not config.get("verification_role_id"):
@@ -115,6 +128,7 @@ class Verification(commands.Cog):
 
     @verification.command(name="status", description="View verification settings")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def status(self, interaction: discord.Interaction):
         config = get_guild_config(interaction.guild_id)
         verified = interaction.guild.get_role(config.get("verification_role_id") or 0)
@@ -129,6 +143,7 @@ class Verification(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="verify", description="Run verification for yourself")
+    @app_commands.guild_only()
     async def verify(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message("Use this command inside a server.", ephemeral=True)
@@ -138,6 +153,7 @@ class Verification(commands.Cog):
 
     @app_commands.command(name="verificationinfo", description="View public verification information about a member")
     @app_commands.describe(user="Member to inspect")
+    @app_commands.guild_only()
     async def verificationinfo(self, interaction: discord.Interaction, user: discord.Member | None = None):
         user = user or interaction.user
         account_age_days = max(0, (datetime.now(timezone.utc) - user.created_at).days)
