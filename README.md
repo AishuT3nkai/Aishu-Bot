@@ -137,6 +137,29 @@ Never commit .env or a bot token.
 
 Aishu creates a local SQLite database named aishu.db automatically.
 
+## Private web dashboard
+
+The dashboard lives in dashboard/ and is designed for Vercel.
+
+Vercel project settings:
+- Root Directory: dashboard
+- Framework: Next.js
+
+Configure dashboard/.env using the Discord OAuth application values and the two authorized Discord user IDs.
+
+Required dashboard variables:
+- DISCORD_CLIENT_ID
+- DISCORD_CLIENT_SECRET
+- DISCORD_REDIRECT_URI
+- ADMIN_USER_ID_1
+- ADMIN_USER_ID_2
+- ADMIN_GUILD_ID
+- DASHBOARD_SESSION_SECRET
+
+In the Discord Developer Portal, add the exact DISCORD_REDIRECT_URI as an OAuth2 redirect URL and request the identify and guilds scopes.
+
+The dashboard currently provides the secure login and admin UI shell. A bot API bridge will connect the dashboard controls to the live Discord configuration; until that bridge is added, the dashboard does not pretend to change server settings.
+
 ## Project structure
 
     bot.py
