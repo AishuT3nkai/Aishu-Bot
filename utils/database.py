@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS guild_config (
     modlog_channel_id INTEGER,
     suggestion_channel_id INTEGER,
     report_channel_id INTEGER,
+    birthday_channel_id INTEGER,
     ticket_category_id INTEGER,
     ticket_support_role_id INTEGER,
     autorole_id INTEGER,
@@ -79,6 +80,12 @@ def connect() -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(SCHEMA)
+
+    # Lightweight migrations for databases created before newer config fields existed.
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(guild_config)").fetchall()}
+    if "birthday_channel_id" not in columns:
+        connection.execute("ALTER TABLE guild_config ADD COLUMN birthday_channel_id INTEGER")
+
     connection.commit()
     return connection
 
@@ -230,3 +237,63 @@ def add_report(guild_id: int, reporter_id: int, target_id: int | None, content: 
     report_id = int(cursor.lastrowid)
     connection.close()
     return report_id
+
+
+def set_birthday(guild_id: int, user_id: int, month: int, day: int) -> None:
+    connection = connect()
+    connection.execute(
+        """
+        INSERT INTO birthdays (guild_id, user_id, month, day)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(guild_id, user_id) DO UPDATE SET
+            month = excluded.month,
+            day = excluded.day
+        """,
+        (guild_id, user_id, month, day),
+    )
+    connection.commit()
+    connection.close()
+
+
+def get_birthday(guild_id: int, user_id: int):
+    connection = connect()
+    row = connection.execute(
+        "SELECT * FROM birthdays WHERE guild_id = ? AND user_id = ?",
+        (guild_id, user_id),
+    ).fetchone()
+    connection.close()
+    return row
+
+
+def remove_birthday(guild_id: int, user_id: int) -> bool:
+    connection = connect()
+    cursor = connection.execute(
+        "DELETE FROM birthdays WHERE guild_id = ? AND user_id = ?",
+        (guild_id, user_id),
+    )
+    connection.commit()
+    removed = cursor.rowcount > 0
+    connection.close()
+    return removed
+
+
+def get_birthdays(guild_id: int, month: int, day: int):
+    connection = connect()
+    rows = connection.execute(
+        "SELECT * FROM birthdays WHERE guild_id = ? AND month = ? AND day = ?",
+        (guild_id, month, day),
+    ).fetchall()
+    connection.close()
+    return rows
+
+
+def set_report_status(guild_id: int, report_id: int, status: str) -> bool:
+    connection = connect()
+    cursor = connection.execute(
+        "UPDATE reports SET status = ? WHERE guild_id = ? AND id = ?",
+        (status, guild_id, report_id),
+    )
+    connection.commit()
+    updated = cursor.rowcount > 0
+    connection.close()
+    return updated
