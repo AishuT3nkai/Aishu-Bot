@@ -16,6 +16,9 @@ EXTENSIONS = (
     "cogs.server",
     "cogs.verification",
     "cogs.welcome",
+    "cogs.tickets",
+    "cogs.birthday",
+    "cogs.reviews",
 )
 
 if not TOKEN:
