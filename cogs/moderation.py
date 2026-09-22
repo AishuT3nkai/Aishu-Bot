@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from utils.database import (
     add_warning, get_warnings, clear_warnings, get_guild_config
 )
@@ -91,7 +91,7 @@ class Moderation(commands.Cog):
         if not ok:
             await interaction.response.send_message(error, ephemeral=True)
             return
-        await user.timeout(discord.utils.utcnow() + __import__("datetime").timedelta(minutes=minutes), reason=reason)
+        await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes), reason=reason)
         await send_modlog(
             interaction.guild,
             "Member Timed Out",
