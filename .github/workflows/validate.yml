@@ -76,7 +76,6 @@ jobs:
 
           async def load_cogs():
               bot = AishuBot()
-              original_sync = bot.tree.sync
 
               async def fake_sync(*args, **kwargs):
                   return []
@@ -93,6 +92,9 @@ jobs:
                           await bot.unload_extension(extension)
                   await bot.close()
 
-          asyncio.run(load_cogs())
+          with tempfile.TemporaryDirectory() as tmp:
+              database.DB_PATH = Path(tmp) / "smoke.db"
+              asyncio.run(load_cogs())
+
           print("OK: cog setup")
           PY
