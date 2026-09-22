@@ -55,6 +55,8 @@ class AishuBot(commands.Bot):
 
 
 async def main():
+    if not TOKEN:
+        raise RuntimeError("DISCORD_TOKEN is missing from the environment.")
     async with AishuBot() as bot:
         await bot.start(TOKEN)
 
