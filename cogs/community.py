@@ -63,7 +63,10 @@ class SuggestionModal(discord.ui.Modal, title="Community Suggestion"):
             embed = discord.Embed(title=f"Suggestion #{suggestion_id}", description=self.content.value, color=discord.Color.blurple())
             embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
             embed.set_footer(text=f"Submitted by {interaction.user.id}")
-            await channel.send(embed=embed)
+            try:
+                await channel.send(embed=embed)
+            except (discord.Forbidden, discord.HTTPException):
+                pass
         await interaction.response.send_message(f"Suggestion #{suggestion_id} submitted.", ephemeral=True)
 
 
@@ -93,7 +96,10 @@ class ReportModal(discord.ui.Modal, title="Community Report"):
             embed = discord.Embed(title=f"Report #{report_id}", description=self.content.value, color=discord.Color.orange())
             embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
             embed.set_footer(text=f"Reporter ID: {interaction.user.id}")
-            await channel.send(embed=embed)
+            try:
+                await channel.send(embed=embed)
+            except (discord.Forbidden, discord.HTTPException):
+                pass
         await interaction.response.send_message(f"Report #{report_id} submitted privately.", ephemeral=True)
 
 
@@ -118,6 +124,7 @@ class Community(commands.Cog):
         )
 
     @app_commands.command(name="introduce", description="Create or update your community introduction")
+    @app_commands.guild_only()
     async def introduce(self, interaction: discord.Interaction):
         if interaction.guild_id is None:
             await interaction.response.send_message("Use this command inside a server.", ephemeral=True)
@@ -126,6 +133,7 @@ class Community(commands.Cog):
 
     @app_commands.command(name="profile", description="View a member's introduction")
     @app_commands.describe(user="Member to inspect")
+    @app_commands.guild_only()
     async def profile(self, interaction: discord.Interaction, user: discord.Member | None = None):
         user = user or interaction.user
         language = interaction_language(interaction)
@@ -142,6 +150,7 @@ class Community(commands.Cog):
 
     @app_commands.command(name="avatar", description="View a member's avatar")
     @app_commands.describe(user="Member whose avatar you want to view")
+    @app_commands.guild_only()
     async def avatar(self, interaction: discord.Interaction, user: discord.User | None = None):
         user = user or interaction.user
         embed = discord.Embed(title=f"{user.display_name}'s Avatar", color=discord.Color.blurple())
@@ -150,6 +159,7 @@ class Community(commands.Cog):
 
     @app_commands.command(name="userinfo", description="View useful public Discord account information")
     @app_commands.describe(user="Member to inspect")
+    @app_commands.guild_only()
     async def userinfo(self, interaction: discord.Interaction, user: discord.Member | None = None):
         user = user or interaction.user
         embed = discord.Embed(title=f"User Info — {user.display_name}", color=discord.Color.blurple())
@@ -166,6 +176,7 @@ class Community(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="serverinfo", description="View server information")
+    @app_commands.guild_only()
     async def serverinfo(self, interaction: discord.Interaction):
         guild = interaction.guild
         embed = discord.Embed(title=guild.name, color=discord.Color.blurple())
@@ -180,11 +191,13 @@ class Community(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="suggest", description="Submit a community suggestion")
+    @app_commands.guild_only()
     async def suggest(self, interaction: discord.Interaction):
         await interaction.response.send_modal(SuggestionModal())
 
     @app_commands.command(name="report", description="Submit a private community report")
     @app_commands.describe(user="Optional member this report concerns")
+    @app_commands.guild_only()
     async def report(self, interaction: discord.Interaction, user: discord.Member | None = None):
         await interaction.response.send_modal(ReportModal(user.id if user else None))
 
