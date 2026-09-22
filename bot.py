@@ -57,9 +57,11 @@ def db():
     connection = sqlite3.connect(DB_PATH)
     connection.execute(
         """
-        CREATE TABLE IF NOT EXISTS guild_settings (
-            guild_id INTEGER PRIMARY KEY,
-            language TEXT NOT NULL DEFAULT 'id'
+        CREATE TABLE IF NOT EXISTS user_settings (
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            language TEXT NOT NULL DEFAULT 'id',
+            PRIMARY KEY (guild_id, user_id)
         )
         """
     )
@@ -81,27 +83,35 @@ def db():
     return connection
 
 
-def get_language(guild_id: int) -> str:
+def get_language(guild_id: int, user_id: int) -> str:
+    # Admins always receive English so administrative commands stay consistent.
     connection = db()
     row = connection.execute(
-        "SELECT language FROM guild_settings WHERE guild_id = ?", (guild_id,)
+        "SELECT language FROM user_settings WHERE guild_id = ? AND user_id = ?",
+        (guild_id, user_id),
     ).fetchone()
     connection.close()
     return row[0] if row else "id"
 
 
-def set_language(guild_id: int, language: str):
+def set_language(guild_id: int, user_id: int, language: str):
     connection = db()
     connection.execute(
         """
-        INSERT INTO guild_settings (guild_id, language)
-        VALUES (?, ?)
-        ON CONFLICT(guild_id) DO UPDATE SET language=excluded.language
+        INSERT INTO user_settings (guild_id, user_id, language)
+        VALUES (?, ?, ?)
+        ON CONFLICT(guild_id, user_id) DO UPDATE SET language=excluded.language
         """,
-        (guild_id, language),
+        (guild_id, user_id, language),
     )
     connection.commit()
     connection.close()
+
+
+def get_interaction_language(interaction: discord.Interaction) -> str:
+    if interaction.guild and interaction.user.guild_permissions.manage_guild:
+        return "en"
+    return get_language(interaction.guild_id, interaction.user.id)
 
 
 def save_introduction(guild_id: int, user_id: int, values: dict):
@@ -209,12 +219,12 @@ bot = AishuBot()
 
 @bot.tree.command(name="introduce", description="Create or update your server introduction")
 async def introduce(interaction: discord.Interaction):
-    language = get_language(interaction.guild_id)
+    language = get_interaction_language(interaction)
     await interaction.response.send_modal(IntroductionModal(language))
 
 
-@bot.tree.command(name="language", description="Change the bot language for this server")
-@app_commands.describe(language="Choose: Indonesia, Tagalog, or English")
+@bot.tree.command(name="language", description="Set your personal bot language")
+@app_commands.describe(language="Choose your personal language: Indonesia, Tagalog, or English")
 @app_commands.choices(
     language=[
         app_commands.Choice(name="Indonesia", value="id"),
@@ -222,12 +232,14 @@ async def introduce(interaction: discord.Interaction):
         app_commands.Choice(name="English", value="en"),
     ]
 )
-@app_commands.checks.has_permissions(manage_guild=True)
 async def language(interaction: discord.Interaction, language: app_commands.Choice[str]):
-    set_language(interaction.guild_id, language.value)
+    set_language(interaction.guild_id, interaction.user.id, language.value)
+    # The setting confirmation itself follows the language just selected.
     t = TEXT[language.value]
     await interaction.response.send_message(
-        t["language_set"].format(language=LANGUAGES[language.value])
+        t["language_set"].replace("server", "your personal setting").format(
+            language=LANGUAGES[language.value]
+        )
     )
 
 
