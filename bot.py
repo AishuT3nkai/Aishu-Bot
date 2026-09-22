@@ -42,6 +42,17 @@ class AishuBot(commands.Bot):
         print(f"Logged in as {self.user} ({self.user.id})")
         print(f"Connected to {len(self.guilds)} server(s).")
 
+    async def on_app_command_error(self, interaction, error):
+        print(f"App command error: {error!r}")
+        message = "Something went wrong while processing that command."
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+        except discord.HTTPException:
+            pass
+
 
 async def main():
     async with AishuBot() as bot:
