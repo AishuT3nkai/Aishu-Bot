@@ -50,4 +50,49 @@ jobs:
           for name in required:
               assert hasattr(database, name), f"Missing database helper: {name}"
           print("OK: database helpers")
+
+          import asyncio
+          import tempfile
+          from pathlib import Path
+          from bot import AishuBot
+          from utils import database
+
+          with tempfile.TemporaryDirectory() as tmp:
+              database.DB_PATH = Path(tmp) / "smoke.db"
+              conn = database.connect()
+              columns = {row["name"] for row in conn.execute("PRAGMA table_info(guild_config)").fetchall()}
+              assert "birthday_channel_id" in columns
+              conn.close()
+
+              database.set_birthday(1, 2, 6, 21)
+              row = database.get_birthday(1, 2)
+              assert row["month"] == 6 and row["day"] == 21
+              assert len(database.get_birthdays(1, 6, 21)) == 1
+              assert database.remove_birthday(1, 2)
+              assert database.get_birthday(1, 2) is None
+
+              database.add_report(1, 2, None, "smoke", "now")
+              assert database.set_report_status(1, 1, "closed")
+
+          async def load_cogs():
+              bot = AishuBot()
+              original_sync = bot.tree.sync
+
+              async def fake_sync(*args, **kwargs):
+                  return []
+
+              bot.tree.sync = fake_sync
+              try:
+                  await bot.setup_hook()
+              finally:
+                  for extension in reversed(tuple("cogs." + name for name in [
+                      "reviews", "birthday", "tickets", "welcome",
+                      "verification", "server", "moderation", "community",
+                  ])):
+                      if extension in bot.extensions:
+                          await bot.unload_extension(extension)
+                  await bot.close()
+
+          asyncio.run(load_cogs())
+          print("OK: cog setup")
           PY
