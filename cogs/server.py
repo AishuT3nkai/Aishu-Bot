@@ -18,6 +18,7 @@ class Server(commands.Cog):
         app_commands.Choice(name="Suggestions", value="suggestion"),
         app_commands.Choice(name="Reports", value="report"),
     ])
+    @app_commands.guild_only()
     async def channel(self, interaction: discord.Interaction, system: app_commands.Choice[str], channel: discord.TextChannel):
         field = {
             "modlog": "modlog_channel_id",
@@ -30,8 +31,16 @@ class Server(commands.Cog):
     @config.command(name="autorole", description="Configure the automatic role for new members")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(role="Role to give new members", enabled="Enable or disable autorole")
+    @app_commands.guild_only()
     async def autorole(self, interaction: discord.Interaction, role: discord.Role, enabled: bool = True):
-        if role >= interaction.guild.me.top_role:
+        bot_member = interaction.guild.me
+        if bot_member is None:
+            await interaction.response.send_message("I am not ready to manage roles in this server yet.", ephemeral=True)
+            return
+        if role.is_default():
+            await interaction.response.send_message("The @everyone role cannot be used as an autorole.", ephemeral=True)
+            return
+        if role >= bot_member.top_role:
             await interaction.response.send_message("That role must be below my highest role.", ephemeral=True)
             return
         update_guild_config(
@@ -46,6 +55,7 @@ class Server(commands.Cog):
 
     @config.command(name="view", description="View current community configuration")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def view(self, interaction: discord.Interaction):
         config = get_guild_config(interaction.guild_id)
         def channel_name(key: str) -> str:
@@ -68,6 +78,7 @@ class Server(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="stats", description="Show server statistics")
+    @app_commands.guild_only()
     async def stats(self, interaction: discord.Interaction):
         guild = interaction.guild
         humans = sum(1 for member in guild.members if not member.bot)
@@ -82,6 +93,7 @@ class Server(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="help", description="Show Aishu community commands")
+    @app_commands.guild_only()
     async def help(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="Aishu Bot — Community",
