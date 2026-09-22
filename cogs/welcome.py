@@ -26,8 +26,12 @@ class Welcome(commands.Cog):
         if not config.get(key_enabled):
             return
         channel = member.guild.get_channel(config.get(key_channel) or 0)
-        if channel:
+        if not isinstance(channel, discord.TextChannel):
+            return
+        try:
             await channel.send(render_message(default_template, member))
+        except (discord.Forbidden, discord.HTTPException):
+            pass
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -59,17 +63,21 @@ class Welcome(commands.Cog):
         config = get_guild_config(member.guild.id)
         if config.get("goodbye_enabled"):
             channel = member.guild.get_channel(config.get("goodbye_channel_id") or 0)
-            if channel:
-                await channel.send(
-                    render_message(
-                        "Goodbye **{username}**. Thanks for being part of {server}.",
-                        member,
+            if isinstance(channel, discord.TextChannel):
+                try:
+                    await channel.send(
+                        render_message(
+                            "Goodbye **{username}**. Thanks for being part of {server}.",
+                            member,
+                        )
                     )
-                )
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
 
     @welcome.command(name="setup", description="Set the welcome channel and enable welcome messages")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(channel="Channel for welcome messages", enabled="Enable welcome messages")
+    @app_commands.guild_only()
     async def welcome_setup(self, interaction: discord.Interaction, channel: discord.TextChannel, enabled: bool = True):
         update_guild_config(
             interaction.guild_id,
@@ -83,6 +91,7 @@ class Welcome(commands.Cog):
 
     @welcome.command(name="test", description="Send a sample welcome message")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def welcome_test(self, interaction: discord.Interaction):
         config = get_guild_config(interaction.guild_id)
         channel = interaction.guild.get_channel(config.get("welcome_channel_id") or 0)
@@ -95,6 +104,7 @@ class Welcome(commands.Cog):
     @goodbye.command(name="setup", description="Set the goodbye channel and enable goodbye messages")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(channel="Channel for goodbye messages", enabled="Enable goodbye messages")
+    @app_commands.guild_only()
     async def goodbye_setup(self, interaction: discord.Interaction, channel: discord.TextChannel, enabled: bool = True):
         update_guild_config(
             interaction.guild_id,
@@ -108,6 +118,7 @@ class Welcome(commands.Cog):
 
     @goodbye.command(name="test", description="Send a sample goodbye message")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def goodbye_test(self, interaction: discord.Interaction):
         config = get_guild_config(interaction.guild_id)
         channel = interaction.guild.get_channel(config.get("goodbye_channel_id") or 0)
