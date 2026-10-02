@@ -19,6 +19,7 @@ EXTENSIONS = (
     "cogs.tickets",
     "cogs.birthday",
     "cogs.reviews",
+    "cogs.introduction",
 )
 
 
