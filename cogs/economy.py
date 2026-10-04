@@ -5,7 +5,7 @@ import discord
 from discord.ext import commands
 from utils.database import get_economy, update_economy, get_economy_leaderboard
 
-URL_ONLY_RE = re.compile(r"^(?:https?://|www\\.)\\S+$", re.IGNORECASE)
+URL_ONLY_RE = re.compile(r"^(?:https?://|www\.)\S+$", re.IGNORECASE)
 MIN_MESSAGE_LENGTH = 5
 XP_COOLDOWN_SECONDS = 60
 DAILY_XP_CAP = 300
