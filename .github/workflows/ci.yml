@@ -17,3 +17,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Compile Python files
         run: python -m compileall -q .
+      - name: Database smoke test
+        run: python -c "from utils.database import connect; db = connect(); db.execute('SELECT 1'); db.close()"
+      - name: Import feature modules
+        run: python -c "import cogs.automod, cogs.antiraid, cogs.economy, cogs.community_tools, cogs.server_backup"
