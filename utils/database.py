@@ -86,6 +86,14 @@ CREATE TABLE IF NOT EXISTS role_panels (
     message_id INTEGER NOT NULL,
     role_ids_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS reaction_roles (
+    guild_id INTEGER NOT NULL,
+    channel_id INTEGER NOT NULL,
+    message_id INTEGER NOT NULL,
+    emoji TEXT NOT NULL,
+    role_id INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, message_id, emoji)
+);
 CREATE TABLE IF NOT EXISTS automod_config (
     guild_id INTEGER PRIMARY KEY,
     config_json TEXT NOT NULL
@@ -558,3 +566,45 @@ def get_member_cases(guild_id: int, user_id: int, limit: int = 15):
     ).fetchall()
     connection.close()
     return rows
+
+
+def add_reaction_role(guild_id: int, channel_id: int, message_id: int, emoji: str, role_id: int) -> None:
+    connection = connect()
+    connection.execute(
+        """INSERT INTO reaction_roles (guild_id, channel_id, message_id, emoji, role_id)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(guild_id, message_id, emoji) DO UPDATE SET
+            channel_id = excluded.channel_id, role_id = excluded.role_id""",
+        (guild_id, channel_id, message_id, emoji, role_id),
+    )
+    connection.commit()
+    connection.close()
+
+
+def get_reaction_role(guild_id: int, message_id: int, emoji: str):
+    connection = connect()
+    row = connection.execute(
+        "SELECT * FROM reaction_roles WHERE guild_id = ? AND message_id = ? AND emoji = ?",
+        (guild_id, message_id, emoji),
+    ).fetchone()
+    connection.close()
+    return dict(row) if row else None
+
+
+def get_reaction_roles():
+    connection = connect()
+    rows = connection.execute("SELECT * FROM reaction_roles").fetchall()
+    connection.close()
+    return [dict(row) for row in rows]
+
+
+def remove_reaction_role(guild_id: int, message_id: int, emoji: str) -> bool:
+    connection = connect()
+    cursor = connection.execute(
+        "DELETE FROM reaction_roles WHERE guild_id = ? AND message_id = ? AND emoji = ?",
+        (guild_id, message_id, emoji),
+    )
+    connection.commit()
+    removed = cursor.rowcount > 0
+    connection.close()
+    return removed
