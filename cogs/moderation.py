@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from datetime import datetime, timezone, timedelta
-from utils.database import add_warning, get_warnings, clear_warnings, get_guild_config
+from utils.database import add_warning, get_warnings, clear_warnings, get_guild_config, create_case, get_case, get_member_cases
 
 async def send_modlog(guild: discord.Guild, title: str, description: str, color: discord.Color):
     config = get_guild_config(guild.id)
@@ -40,8 +40,9 @@ class Moderation(commands.Cog):
         if not ok:
             await ctx.send(error, delete_after=8); return
         warning_id = add_warning(ctx.guild.id, user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())
-        await send_modlog(ctx.guild, "Member Warned", f"**Member:** {user.mention}\n**Moderator:** {ctx.author.mention}\n**Warning:** #{warning_id}\n**Reason:** {reason}", discord.Color.orange())
-        await ctx.send(f"Warned {user.mention}. Warning #{warning_id}.", delete_after=10)
+        case_id = create_case(ctx.guild.id, "warn", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat(), metadata={"warning_id": warning_id})
+        await send_modlog(ctx.guild, "Member Warned", f"**Member:** {user.mention}\n**Moderator:** {ctx.author.mention}\n**Warning:** #{warning_id}\n**Case:** #{case_id}\n**Reason:** {reason}", discord.Color.orange())
+        await ctx.send(f"Warned {user.mention}. Warning #{warning_id} | Case #{case_id}.", delete_after=10)
 
     @commands.command()
     @commands.guild_only()
@@ -75,7 +76,7 @@ class Moderation(commands.Cog):
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not timeout that member: {error}", delete_after=8); return
         await send_modlog(ctx.guild, "Member Timed Out", f"**Member:** {user.mention}\n**Moderator:** {ctx.author.mention}\n**Duration:** {minutes} minute(s)\n**Reason:** {reason}", discord.Color.red())
-        await ctx.send(f"Timed out {user.mention} for {minutes} minute(s).", delete_after=10)
+        await ctx.send(f"Timed out {user.mention} for {minutes} minute(s) | Case #{case_id}.", delete_after=10)
 
     @commands.command()
     @commands.guild_only()
@@ -88,7 +89,9 @@ class Moderation(commands.Cog):
             await user.timeout(None, reason=f"Timeout removed by {ctx.author}")
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not remove that timeout: {error}", delete_after=8); return
-        await ctx.send(f"Removed timeout from {user.mention}.", delete_after=10)
+        case_id = create_case(ctx.guild.id, "untimeout", user.id, ctx.author.id, "Timeout removed", datetime.now(timezone.utc).isoformat())
+        await send_modlog(ctx.guild, "Timeout Removed", f"**Member:** {user.mention}\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}", discord.Color.green())
+        await ctx.send(f"Removed timeout from {user.mention}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
     @commands.guild_only()
@@ -102,7 +105,7 @@ class Moderation(commands.Cog):
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not kick that member: {error}", delete_after=8); return
         await send_modlog(ctx.guild, "Member Kicked", f"**Member:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.red())
-        await ctx.send(f"Kicked {user}.", delete_after=10)
+        await ctx.send(f"Kicked {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
     @commands.guild_only()
@@ -116,7 +119,7 @@ class Moderation(commands.Cog):
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not ban that member: {error}", delete_after=8); return
         await send_modlog(ctx.guild, "Member Banned", f"**Member:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.dark_red())
-        await ctx.send(f"Banned {user}.", delete_after=10)
+        await ctx.send(f"Banned {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
     @commands.guild_only()
@@ -130,7 +133,7 @@ class Moderation(commands.Cog):
         except (discord.NotFound, discord.HTTPException):
             await ctx.send("That user is not banned or could not be unbanned.", delete_after=8); return
         await send_modlog(ctx.guild, "User Unbanned", f"**User:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.green())
-        await ctx.send(f"Unbanned {user}.", delete_after=10)
+        await ctx.send(f"Unbanned {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
     @commands.guild_only()
@@ -143,7 +146,7 @@ class Moderation(commands.Cog):
         deleted = await ctx.channel.purge(limit=amount + 1)
         count = max(0, len(deleted) - 1)
         await send_modlog(ctx.guild, "Messages Purged", f"**Channel:** {ctx.channel.mention}\n**Moderator:** {ctx.author.mention}\n**Deleted:** {count}", discord.Color.orange())
-        await ctx.send(f"Deleted {count} message(s).", delete_after=5)
+        await ctx.send(f"Deleted {count} message(s). Case #{case_id}.", delete_after=5)
 
     @commands.command()
     @commands.guild_only()
@@ -153,7 +156,8 @@ class Moderation(commands.Cog):
             await ctx.send("Slowmode must be between 0 and 21600 seconds.", delete_after=8); return
         if isinstance(ctx.channel, discord.TextChannel):
             await ctx.channel.edit(slowmode_delay=seconds)
-        await ctx.send(f"Slowmode set to {seconds} second(s).", delete_after=8)
+        case_id = create_case(ctx.guild.id, "slowmode", None, ctx.author.id, f"Slowmode set to {seconds}s", datetime.now(timezone.utc).isoformat(), metadata={"channel_id": ctx.channel.id, "seconds": seconds})
+        await ctx.send(f"Slowmode set to {seconds} second(s). Case #{case_id}.", delete_after=8)
 
     @commands.command()
     @commands.guild_only()
@@ -162,7 +166,8 @@ class Moderation(commands.Cog):
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = False
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=f"Locked by {ctx.author}")
-        await ctx.send("Channel locked.")
+        case_id = create_case(ctx.guild.id, "lock", None, ctx.author.id, "Channel locked", datetime.now(timezone.utc).isoformat(), metadata={"channel_id": ctx.channel.id})
+        await ctx.send(f"Channel locked. Case #{case_id}.")
 
     @commands.command()
     @commands.guild_only()
@@ -171,9 +176,43 @@ class Moderation(commands.Cog):
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = None
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=f"Unlocked by {ctx.author}")
-        await ctx.send("Channel unlocked.")
+        case_id = create_case(ctx.guild.id, "unlock", None, ctx.author.id, "Channel unlocked", datetime.now(timezone.utc).isoformat(), metadata={"channel_id": ctx.channel.id})
+        await ctx.send(f"Channel unlocked. Case #{case_id}.")
 
-    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
+
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(view_audit_log=True)
+    async def case(self, ctx: commands.Context, case_id: int):
+        row = get_case(ctx.guild.id, case_id)
+        if not row:
+            await ctx.send("Case not found.", delete_after=8)
+            return
+        embed = discord.Embed(title=f"Moderation Case #{case_id}", color=discord.Color.blurple())
+        embed.add_field(name="Action", value=row["action"])
+        embed.add_field(name="Target", value=f"<@{row['target_id']}>" if row["target_id"] else "Server/channel")
+        embed.add_field(name="Moderator", value=f"<@{row['moderator_id']}>")
+        embed.add_field(name="Reason", value=row["reason"][:1024], inline=False)
+        embed.add_field(name="Created", value=row["created_at"][:19])
+        if row["duration"] is not None:
+            embed.add_field(name="Duration", value=f"{row['duration']} minute(s)")
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(view_audit_log=True)
+    async def history(self, ctx: commands.Context, user: discord.Member):
+        rows = get_member_cases(ctx.guild.id, user.id)
+        if not rows:
+            await ctx.send(f"No moderation cases found for {user.mention}.")
+            return
+        lines = [
+            f"Case #{row['case_id']} — {row['action']} — <@{row['moderator_id']}> — {row['created_at'][:10]}"
+            for row in rows
+        ]
+        await ctx.send(embed=discord.Embed(title=f"Moderation History — {user.display_name}", description="\n".join(lines)))
+\n    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.MissingPermissions):
             await ctx.send("You do not have permission to use this moderation command.", delete_after=8)
         elif isinstance(error, commands.MissingRequiredArgument):
