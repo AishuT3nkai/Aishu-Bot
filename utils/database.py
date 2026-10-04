@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS economy (
     daily_at REAL NOT NULL DEFAULT 0,
     PRIMARY KEY (guild_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS role_panels (
+    guild_id INTEGER PRIMARY KEY,
+    channel_id INTEGER NOT NULL,
+    message_id INTEGER NOT NULL,
+    role_ids_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS automod_config (
     guild_id INTEGER PRIMARY KEY,
     config_json TEXT NOT NULL
@@ -414,3 +420,34 @@ def get_economy_leaderboard(guild_id: int, limit: int = 10):
     ).fetchall()
     connection.close()
     return rows
+
+
+def save_role_panel(guild_id: int, channel_id: int, message_id: int, role_ids: list[int]) -> None:
+    import json
+    connection = connect()
+    connection.execute(
+        """INSERT INTO role_panels (guild_id, channel_id, message_id, role_ids_json)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET
+            channel_id = excluded.channel_id,
+            message_id = excluded.message_id,
+            role_ids_json = excluded.role_ids_json""",
+        (guild_id, channel_id, message_id, json.dumps(role_ids)),
+    )
+    connection.commit()
+    connection.close()
+
+
+def get_role_panels():
+    import json
+    connection = connect()
+    rows = connection.execute("SELECT * FROM role_panels").fetchall()
+    connection.close()
+    result = []
+    for row in rows:
+        try:
+            role_ids = json.loads(row["role_ids_json"])
+        except (TypeError, ValueError):
+            role_ids = []
+        result.append((row["guild_id"], row["channel_id"], row["message_id"], role_ids))
+    return result
