@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.database import get_role_panels, save_role_panel
+from utils.database import add_reaction_role, get_reaction_role, get_role_panels, remove_reaction_role, save_role_panel
 
 class RoleSelect(discord.ui.Select):
     def __init__(self, guild_id: int, roles: list[discord.Role]):
@@ -97,8 +97,12 @@ class AnnouncementModal(discord.ui.Modal, title="Create Announcement"):
 class CommunityTools(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._views_restored = False
 
     async def restore_role_panels(self):
+        if self._views_restored:
+            return
+        self._views_restored = True
         for guild_id, channel_id, message_id, role_ids in get_role_panels():
             guild = self.bot.get_guild(guild_id)
             if guild is None:
@@ -158,6 +162,89 @@ class CommunityTools(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view)
         message = await interaction.original_response()
         save_role_panel(interaction.guild.id, interaction.channel_id, message.id, [role.id for role in roles])
+
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        if payload.guild_id is None or payload.member is None or payload.member.bot:
+            return
+        mapping = get_reaction_role(payload.guild_id, payload.message_id, str(payload.emoji))
+        if not mapping:
+            return
+        guild = self.bot.get_guild(payload.guild_id)
+        member = guild.get_member(payload.user_id) if guild else None
+        role = guild.get_role(int(mapping["role_id"])) if guild else None
+        if not member or not role or role.is_default() or role.managed:
+            return
+        if not guild.me or role >= guild.me.top_role:
+            return
+        try:
+            await member.add_roles(role, reason="Aishu reaction role")
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+        if payload.guild_id is None:
+            return
+        mapping = get_reaction_role(payload.guild_id, payload.message_id, str(payload.emoji))
+        if not mapping:
+            return
+        guild = self.bot.get_guild(payload.guild_id)
+        member = guild.get_member(payload.user_id) if guild else None
+        role = guild.get_role(int(mapping["role_id"])) if guild else None
+        if not member or member.bot or not role or role.is_default() or role.managed:
+            return
+        if not guild.me or role >= guild.me.top_role:
+            return
+        try:
+            await member.remove_roles(role, reason="Aishu reaction role")
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+
+    @app_commands.command(name="reactionrole", description="Bind a reaction on an existing message to a role")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_roles=True)
+    @app_commands.describe(channel="Channel containing the target message", message_id="ID of the target message", emoji="Unicode emoji or custom emoji markup", role="Role to assign")
+    async def reactionrole(self, interaction: discord.Interaction, channel: discord.TextChannel, message_id: str, emoji: str, role: discord.Role):
+        if not isinstance(interaction.user, discord.Member) or not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message("You need Manage Roles permission.", ephemeral=True)
+            return
+        if not message_id.isdigit():
+            await interaction.response.send_message("Message ID must be numeric.", ephemeral=True)
+            return
+        bot_member = interaction.guild.me
+        if role.is_default() or role.managed or bot_member is None or role >= bot_member.top_role:
+            await interaction.response.send_message("I cannot manage that role. Move my role above it and choose a normal role.", ephemeral=True)
+            return
+        try:
+            message = await channel.fetch_message(int(message_id))
+            reaction_emoji = discord.PartialEmoji.from_str(emoji.strip())
+            await message.add_reaction(reaction_emoji)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException, ValueError):
+            await interaction.response.send_message("I could not access that message or add that emoji reaction.", ephemeral=True)
+            return
+        add_reaction_role(interaction.guild_id, channel.id, message.id, str(reaction_emoji), role.id)
+        await interaction.response.send_message("Reaction " + str(reaction_emoji) + " on that message now grants " + role.mention + ".", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @app_commands.command(name="reactionrole_remove", description="Remove a reaction-role mapping")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_roles=True)
+    async def reactionrole_remove(self, interaction: discord.Interaction, message_id: str, emoji: str):
+        if not isinstance(interaction.user, discord.Member) or not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message("You need Manage Roles permission.", ephemeral=True)
+            return
+        if not message_id.isdigit():
+            await interaction.response.send_message("Message ID must be numeric.", ephemeral=True)
+            return
+        try:
+            normalized_emoji = str(discord.PartialEmoji.from_str(emoji.strip()))
+        except ValueError:
+            await interaction.response.send_message("Invalid emoji.", ephemeral=True)
+            return
+        removed = remove_reaction_role(interaction.guild_id, int(message_id), normalized_emoji)
+        await interaction.response.send_message("Reaction-role mapping removed." if removed else "No matching reaction-role mapping was found.", ephemeral=True)
 
     @app_commands.command(name="announcement", description="Open the announcement builder")
     @app_commands.guild_only()
