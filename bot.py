@@ -17,6 +17,7 @@ EXTENSIONS = (
     "cogs.moderation",
     "cogs.automod",
     "cogs.antiraid",
+    "cogs.economy",
     "cogs.server",
     "cogs.verification",
     "cogs.welcome",
