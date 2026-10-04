@@ -1,28 +1,18 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
 from datetime import datetime, timezone, timedelta
-from utils.database import (
-    add_warning, get_warnings, clear_warnings, get_guild_config
-)
-
+from utils.database import add_warning, get_warnings, clear_warnings, get_guild_config
 
 async def send_modlog(guild: discord.Guild, title: str, description: str, color: discord.Color):
     config = get_guild_config(guild.id)
     channel = guild.get_channel(config.get("modlog_channel_id") or 0)
     if not isinstance(channel, discord.TextChannel):
         return
-    embed = discord.Embed(
-        title=title,
-        description=description,
-        color=color,
-        timestamp=datetime.now(timezone.utc),
-    )
+    embed = discord.Embed(title=title, description=description, color=color, timestamp=datetime.now(timezone.utc))
     try:
         await channel.send(embed=embed)
     except (discord.Forbidden, discord.HTTPException):
         pass
-
 
 def can_act(moderator: discord.Member, target: discord.Member) -> tuple[bool, str]:
     if moderator.id == target.id:
@@ -38,185 +28,160 @@ def can_act(moderator: discord.Member, target: discord.Member) -> tuple[bool, st
         return False, "That member is at or above my highest role."
     return True, ""
 
-
 class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="warn", description="Warn a member")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(manage_messages=True)
-    @app_commands.describe(user="Member to warn", reason="Reason for the warning")
-    async def warn(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
-        ok, error = can_act(interaction.user, user)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_messages=True)
+    async def warn(self, ctx: commands.Context, user: discord.Member, *, reason: str = "No reason provided"):
+        ok, error = can_act(ctx.author, user)
         if not ok:
-            await interaction.response.send_message(error, ephemeral=True)
-            return
-        warning_id = add_warning(
-            interaction.guild_id, user.id, interaction.user.id, reason,
-            datetime.now(timezone.utc).isoformat(),
-        )
-        await send_modlog(
-            interaction.guild,
-            "Member Warned",
-            f"**Member:** {user.mention}\n**Moderator:** {interaction.user.mention}\n**Warning:** #{warning_id}\n**Reason:** {reason}",
-            discord.Color.orange(),
-        )
-        await interaction.response.send_message(f"Warned {user.mention}. Warning #{warning_id}.", ephemeral=True)
+            await ctx.send(error, delete_after=8); return
+        warning_id = add_warning(ctx.guild.id, user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())
+        await send_modlog(ctx.guild, "Member Warned", f"**Member:** {user.mention}\n**Moderator:** {ctx.author.mention}\n**Warning:** #{warning_id}\n**Reason:** {reason}", discord.Color.orange())
+        await ctx.send(f"Warned {user.mention}. Warning #{warning_id}.", delete_after=10)
 
-    @app_commands.command(name="warnings", description="View a member's warnings")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(manage_messages=True)
-    @app_commands.describe(user="Member whose warnings you want to view")
-    async def warnings(self, interaction: discord.Interaction, user: discord.Member):
-        rows = get_warnings(interaction.guild_id, user.id)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_messages=True)
+    async def warnings(self, ctx: commands.Context, user: discord.Member):
+        rows = get_warnings(ctx.guild.id, user.id)
         if not rows:
-            await interaction.response.send_message(f"{user.mention} has no warnings.", ephemeral=True)
-            return
-        lines = [
-            f"**#{row['id']}** — <@{row['moderator_id']}> — {row['reason']} "
-            f"({row['created_at'][:10]})"
-            for row in rows[:15]
-        ]
-        embed = discord.Embed(title=f"Warnings — {user.display_name}", description="\n".join(lines), color=discord.Color.orange())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            await ctx.send(f"{user.mention} has no warnings.", delete_after=8); return
+        lines = [f"**#{row['id']}** — <@{row['moderator_id']}> — {row['reason']} ({row['created_at'][:10]})" for row in rows[:15]]
+        await ctx.send(embed=discord.Embed(title=f"Warnings — {user.display_name}", description="\n".join(lines), color=discord.Color.orange()))
 
-    @app_commands.command(name="clearwarnings", description="Clear all warnings for a member")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(manage_guild=True)
-    @app_commands.describe(user="Member whose warnings should be cleared")
-    async def clearwarnings(self, interaction: discord.Interaction, user: discord.Member):
-        count = clear_warnings(interaction.guild_id, user.id)
-        await send_modlog(
-            interaction.guild,
-            "Warnings Cleared",
-            f"**Member:** {user.mention}\n**Moderator:** {interaction.user.mention}\n**Removed:** {count}",
-            discord.Color.green(),
-        )
-        await interaction.response.send_message(f"Cleared {count} warning(s) for {user.mention}.", ephemeral=True)
+    @commands.command(name="clearwarnings")
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    async def clearwarnings(self, ctx: commands.Context, user: discord.Member):
+        count = clear_warnings(ctx.guild.id, user.id)
+        await send_modlog(ctx.guild, "Warnings Cleared", f"**Member:** {user.mention}\n**Moderator:** {ctx.author.mention}\n**Removed:** {count}", discord.Color.green())
+        await ctx.send(f"Cleared {count} warning(s) for {user.mention}.", delete_after=10)
 
-    @app_commands.command(name="timeout", description="Timeout a member")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(moderate_members=True)
-    @app_commands.describe(user="Member to timeout", minutes="Timeout duration in minutes", reason="Reason")
-    async def timeout(self, interaction: discord.Interaction, user: discord.Member, minutes: app_commands.Range[int, 1, 40320], reason: str = "No reason provided"):
-        ok, error = can_act(interaction.user, user)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(moderate_members=True)
+    async def timeout(self, ctx: commands.Context, user: discord.Member, minutes: int, *, reason: str = "No reason provided"):
+        if not 1 <= minutes <= 40320:
+            await ctx.send("Timeout must be between 1 and 40320 minutes.", delete_after=8); return
+        ok, error = can_act(ctx.author, user)
         if not ok:
-            await interaction.response.send_message(error, ephemeral=True)
-            return
-        await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes), reason=reason)
-        await send_modlog(
-            interaction.guild,
-            "Member Timed Out",
-            f"**Member:** {user.mention}\n**Moderator:** {interaction.user.mention}\n**Duration:** {minutes} minute(s)\n**Reason:** {reason}",
-            discord.Color.red(),
-        )
-        await interaction.response.send_message(f"Timed out {user.mention} for {minutes} minute(s).", ephemeral=True)
+            await ctx.send(error, delete_after=8); return
+        try:
+            await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes), reason=reason)
+        except (discord.Forbidden, discord.HTTPException) as error:
+            await ctx.send(f"I could not timeout that member: {error}", delete_after=8); return
+        await send_modlog(ctx.guild, "Member Timed Out", f"**Member:** {user.mention}\n**Moderator:** {ctx.author.mention}\n**Duration:** {minutes} minute(s)\n**Reason:** {reason}", discord.Color.red())
+        await ctx.send(f"Timed out {user.mention} for {minutes} minute(s).", delete_after=10)
 
-    @app_commands.command(name="untimeout", description="Remove a member's timeout")
-    @app_commands.default_permissions(moderate_members=True)
-    @app_commands.describe(user="Member whose timeout should be removed")
-    @app_commands.guild_only()
-    async def untimeout(self, interaction: discord.Interaction, user: discord.Member):
-        ok, error = can_act(interaction.user, user)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(moderate_members=True)
+    async def untimeout(self, ctx: commands.Context, user: discord.Member):
+        ok, error = can_act(ctx.author, user)
         if not ok:
-            await interaction.response.send_message(error, ephemeral=True)
-            return
-        await user.timeout(None, reason=f"Timeout removed by {interaction.user}")
-        await interaction.response.send_message(f"Removed timeout from {user.mention}.", ephemeral=True)
+            await ctx.send(error, delete_after=8); return
+        try:
+            await user.timeout(None, reason=f"Timeout removed by {ctx.author}")
+        except (discord.Forbidden, discord.HTTPException) as error:
+            await ctx.send(f"I could not remove that timeout: {error}", delete_after=8); return
+        await ctx.send(f"Removed timeout from {user.mention}.", delete_after=10)
 
-    @app_commands.command(name="kick", description="Kick a member")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(kick_members=True)
-    @app_commands.describe(user="Member to kick", reason="Reason")
-    async def kick(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
-        ok, error = can_act(interaction.user, user)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(kick_members=True)
+    async def kick(self, ctx: commands.Context, user: discord.Member, *, reason: str = "No reason provided"):
+        ok, error = can_act(ctx.author, user)
         if not ok:
-            await interaction.response.send_message(error, ephemeral=True)
-            return
-        await user.kick(reason=reason)
-        await send_modlog(interaction.guild, "Member Kicked", f"**Member:** {user} ({user.id})\n**Moderator:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.red())
-        await interaction.response.send_message(f"Kicked {user}.", ephemeral=True)
+            await ctx.send(error, delete_after=8); return
+        try:
+            await user.kick(reason=reason)
+        except (discord.Forbidden, discord.HTTPException) as error:
+            await ctx.send(f"I could not kick that member: {error}", delete_after=8); return
+        await send_modlog(ctx.guild, "Member Kicked", f"**Member:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.red())
+        await ctx.send(f"Kicked {user}.", delete_after=10)
 
-    @app_commands.command(name="ban", description="Ban a member")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(ban_members=True)
-    @app_commands.describe(user="Member to ban", reason="Reason")
-    async def ban(self, interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
-        ok, error = can_act(interaction.user, user)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(ban_members=True)
+    async def ban(self, ctx: commands.Context, user: discord.Member, *, reason: str = "No reason provided"):
+        ok, error = can_act(ctx.author, user)
         if not ok:
-            await interaction.response.send_message(error, ephemeral=True)
-            return
-        await user.ban(reason=reason, delete_message_seconds=0)
-        await send_modlog(interaction.guild, "Member Banned", f"**Member:** {user} ({user.id})\n**Moderator:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.dark_red())
-        await interaction.response.send_message(f"Banned {user}.", ephemeral=True)
+            await ctx.send(error, delete_after=8); return
+        try:
+            await user.ban(reason=reason, delete_message_seconds=0)
+        except (discord.Forbidden, discord.HTTPException) as error:
+            await ctx.send(f"I could not ban that member: {error}", delete_after=8); return
+        await send_modlog(ctx.guild, "Member Banned", f"**Member:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.dark_red())
+        await ctx.send(f"Banned {user}.", delete_after=10)
 
-    @app_commands.command(name="unban", description="Unban a user by Discord ID")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(ban_members=True)
-    @app_commands.describe(user_id="Discord user ID", reason="Reason")
-    async def unban(self, interaction: discord.Interaction, user_id: str, reason: str = "No reason provided"):
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(ban_members=True)
+    async def unban(self, ctx: commands.Context, user_id: str, *, reason: str = "No reason provided"):
         if not user_id.isdigit():
-            await interaction.response.send_message("User ID must contain only numbers.", ephemeral=True)
-            return
+            await ctx.send("User ID must contain only numbers.", delete_after=8); return
         try:
             user = await self.bot.fetch_user(int(user_id))
-            await interaction.guild.unban(user, reason=reason)
+            await ctx.guild.unban(user, reason=reason)
         except (discord.NotFound, discord.HTTPException):
-            await interaction.response.send_message("That user is not banned or could not be unbanned.", ephemeral=True)
-            return
-        await send_modlog(interaction.guild, "User Unbanned", f"**User:** {user} ({user.id})\n**Moderator:** {interaction.user.mention}\n**Reason:** {reason}", discord.Color.green())
-        await interaction.response.send_message(f"Unbanned {user}.", ephemeral=True)
+            await ctx.send("That user is not banned or could not be unbanned.", delete_after=8); return
+        await send_modlog(ctx.guild, "User Unbanned", f"**User:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.green())
+        await ctx.send(f"Unbanned {user}.", delete_after=10)
 
-    @app_commands.command(name="purge", description="Delete recent messages from the current channel")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(manage_messages=True)
-    @app_commands.describe(amount="Number of messages to delete")
-    async def purge(self, interaction: discord.Interaction, amount: app_commands.Range[int, 1, 100]):
-        if not isinstance(interaction.channel, discord.TextChannel):
-            await interaction.response.send_message("This command needs a text channel.", ephemeral=True)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_messages=True)
+    async def purge(self, ctx: commands.Context, amount: int):
+        if not 1 <= amount <= 100:
+            await ctx.send("Purge amount must be between 1 and 100.", delete_after=8); return
+        if not isinstance(ctx.channel, discord.TextChannel):
             return
-        await interaction.response.defer(ephemeral=True)
-        deleted = await interaction.channel.purge(limit=amount)
-        await send_modlog(
-            interaction.guild,
-            "Messages Purged",
-            f"**Channel:** {interaction.channel.mention}\n**Moderator:** {interaction.user.mention}\n**Deleted:** {len(deleted)}",
-            discord.Color.orange(),
-        )
-        await interaction.followup.send(f"Deleted {len(deleted)} message(s).", ephemeral=True)
+        deleted = await ctx.channel.purge(limit=amount + 1)
+        count = max(0, len(deleted) - 1)
+        await send_modlog(ctx.guild, "Messages Purged", f"**Channel:** {ctx.channel.mention}\n**Moderator:** {ctx.author.mention}\n**Deleted:** {count}", discord.Color.orange())
+        await ctx.send(f"Deleted {count} message(s).", delete_after=5)
 
-    @app_commands.command(name="slowmode", description="Set the current channel slowmode")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(manage_channels=True)
-    @app_commands.describe(seconds="Slowmode in seconds, 0 to disable")
-    async def slowmode(self, interaction: discord.Interaction, seconds: app_commands.Range[int, 0, 21600]):
-        if not isinstance(interaction.channel, discord.TextChannel):
-            await interaction.response.send_message("This command needs a text channel.", ephemeral=True)
-            return
-        await interaction.channel.edit(slowmode_delay=seconds)
-        await interaction.response.send_message(f"Slowmode set to {seconds} second(s).", ephemeral=True)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_channels=True)
+    async def slowmode(self, ctx: commands.Context, seconds: int):
+        if not 0 <= seconds <= 21600:
+            await ctx.send("Slowmode must be between 0 and 21600 seconds.", delete_after=8); return
+        if isinstance(ctx.channel, discord.TextChannel):
+            await ctx.channel.edit(slowmode_delay=seconds)
+        await ctx.send(f"Slowmode set to {seconds} second(s).", delete_after=8)
 
-    @app_commands.command(name="lock", description="Lock the current channel")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(manage_channels=True)
-    async def lock(self, interaction: discord.Interaction):
-        channel = interaction.channel
-        overwrite = channel.overwrites_for(interaction.guild.default_role)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_channels=True)
+    async def lock(self, ctx: commands.Context):
+        overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = False
-        await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite, reason=f"Locked by {interaction.user}")
-        await interaction.response.send_message("Channel locked.", ephemeral=False)
+        await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=f"Locked by {ctx.author}")
+        await ctx.send("Channel locked.")
 
-    @app_commands.command(name="unlock", description="Unlock the current channel")
-    @app_commands.guild_only()
-    @app_commands.default_permissions(manage_channels=True)
-    async def unlock(self, interaction: discord.Interaction):
-        channel = interaction.channel
-        overwrite = channel.overwrites_for(interaction.guild.default_role)
+    @commands.command()
+    @commands.guild_only()
+    @commands.has_permissions(manage_channels=True)
+    async def unlock(self, ctx: commands.Context):
+        overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = None
-        await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite, reason=f"Unlocked by {interaction.user}")
-        await interaction.response.send_message("Channel unlocked.", ephemeral=False)
+        await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=f"Unlocked by {ctx.author}")
+        await ctx.send("Channel unlocked.")
 
+    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
+        if isinstance(error, commands.MissingPermissions):
+            await ctx.send("You do not have permission to use this moderation command.", delete_after=8)
+        elif isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send(f"Missing argument. Use ,help {ctx.command.qualified_name} for help.", delete_after=8)
+        elif isinstance(error, commands.BadArgument):
+            await ctx.send("I could not understand one of the arguments.", delete_after=8)
+        else:
+            raise error
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Moderation(bot))
