@@ -282,3 +282,40 @@ The bot is intentionally split into cogs so Community features can grow without 
 - `,server restore <backup_id>`
 
 Discord does not allow a bot to forcibly move members to another server. Members who are no longer present cannot have their roles restored there automatically. Message attachments and original message timestamps are also not guaranteed to be reproducible.
+
+## Recently added feature commands
+
+### Automod (prefix: `,`)
+- `,automod`, `,automod enable`, `,automod disable`
+- `,automod spam on|off [messages] [seconds]`
+- `,automod duplicates on|off [messages] [seconds]`
+- `,automod mentions on|off [maximum]`
+- `,automod links on|off`, `,automod invites on|off`
+- `,automod keywords add <keyword>`, `,automod keywords remove <keyword>`
+- `,automod action delete|warn|timeout [minutes]`, `,automod escalation on|off`
+- `,automod exempt role @role`, `,automod exempt channel #channel`
+- `,automod exempt unrole @role`, `,automod exempt unchannel #channel`
+
+Automod is disabled by default per server. Enable it deliberately and configure rules before relying on it.
+
+### Anti-Raid (prefix: `,`)
+- `,antiraid enable`, `,antiraid disable`
+- `,antiraid threshold <joins> <seconds>`
+- `,antiraid duration <seconds>`
+- `,antiraid newaccount <days>`, `,antiraid bots <threshold>`
+- `,antiraid whitelist add @member`, `,antiraid whitelist remove @member`
+- `,antiraid lock`, `,antiraid unlock`
+
+Anti-Raid is disabled by default. Lockdown permissions depend on the bot's channel permissions and Discord role-overwrite rules.
+
+### Leveling and economy (prefix: `.`)
+- `.level [@member]`, `.balance [@member]`, `.daily`, `.leaderboard`
+- XP cooldown persists across restarts, ignores very short/URL-only/command messages, blocks repeated identical content for a while, and caps XP at 300 per UTC day.
+
+### Role menus, reaction roles, announcements (slash commands)
+- `/rolepanel`: create a persistent select-menu role panel (up to 10 roles).
+- `/reactionrole`: bind a Unicode or custom emoji reaction on an existing message to a role.
+- `/reactionrole_remove`: remove a reaction-role mapping.
+- `/announcement`: open a modal to send an embed announcement with an optional image URL.
+
+The bot needs Message Content Intent enabled in the Discord Developer Portal for prefix commands. Reaction-role mappings and role-panel configuration are stored in SQLite.
