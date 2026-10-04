@@ -66,7 +66,14 @@ CREATE TABLE IF NOT EXISTS reports (
     status TEXT NOT NULL DEFAULT 'open',
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS antiraid_config (\n    guild_id INTEGER PRIMARY KEY,\n    config_json TEXT NOT NULL\n);\nCREATE TABLE IF NOT EXISTS automod_config (\n    guild_id INTEGER PRIMARY KEY,\n    config_json TEXT NOT NULL\n);\nCREATE TABLE IF NOT EXISTS birthdays (
+CREATE TABLE IF NOT EXISTS antiraid_config (
+    guild_id INTEGER PRIMARY KEY,
+    config_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS automod_config (
+    guild_id INTEGER PRIMARY KEY,
+    config_json TEXT NOT NULL
+);\nCREATE TABLE IF NOT EXISTS birthdays (
     guild_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
     month INTEGER NOT NULL,
