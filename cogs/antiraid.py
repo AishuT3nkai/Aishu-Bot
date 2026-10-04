@@ -101,17 +101,21 @@ class AntiRaid(commands.Cog):
         for channel_id, previous in list(locked.items()):
             channel = guild.get_channel(channel_id)
             if not isinstance(channel, discord.TextChannel):
+                locked.pop(channel_id, None)
                 continue
             overwrite = channel.overwrites_for(guild.default_role)
             if overwrite.send_messages is not False:
+                # Someone already changed the lockdown override; do not overwrite their change.
+                locked.pop(channel_id, None)
                 continue
             overwrite.send_messages = previous
             try:
                 await channel.set_permissions(guild.default_role, overwrite=overwrite, reason="Anti-raid lockdown ended")
                 restored += 1
+                locked.pop(channel_id, None)
             except (discord.Forbidden, discord.HTTPException):
+                # Keep failed entries so a moderator can retry unlocking them.
                 continue
-        locked.clear()
         if not automatic:
             await self._modlog(guild, "Anti-Raid Unlocked", f"Restored {restored} channel(s).")
 
