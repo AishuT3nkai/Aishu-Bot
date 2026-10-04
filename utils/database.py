@@ -90,6 +90,25 @@ CREATE TABLE IF NOT EXISTS automod_config (
     guild_id INTEGER PRIMARY KEY,
     config_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS server_backups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS mod_cases (
+    guild_id INTEGER NOT NULL,
+    case_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    target_id INTEGER,
+    moderator_id INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    duration INTEGER,
+    metadata_json TEXT,
+    PRIMARY KEY (guild_id, case_id)
+);
 CREATE TABLE IF NOT EXISTS birthdays (
     guild_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
@@ -452,3 +471,90 @@ def get_role_panels():
             role_ids = []
         result.append((row["guild_id"], row["channel_id"], row["message_id"], role_ids))
     return result
+
+
+def create_server_backup(guild_id: int, reason: str, snapshot: dict[str, Any]) -> int:
+    import json
+    connection = connect()
+    cursor = connection.execute(
+        "INSERT INTO server_backups (guild_id, created_at, reason, snapshot_json) VALUES (?, ?, ?, ?)",
+        (guild_id, __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), reason, json.dumps(snapshot, ensure_ascii=False)),
+    )
+    connection.commit()
+    backup_id = int(cursor.lastrowid)
+    connection.close()
+    return backup_id
+
+
+def get_server_backups(guild_id: int, limit: int = 10):
+    import json
+    connection = connect()
+    rows = connection.execute(
+        "SELECT id, guild_id, created_at, reason, snapshot_json FROM server_backups WHERE guild_id = ? ORDER BY id DESC LIMIT ?",
+        (guild_id, limit),
+    ).fetchall()
+    connection.close()
+    result = []
+    for row in rows:
+        try:
+            snapshot = json.loads(row["snapshot_json"])
+        except (TypeError, ValueError):
+            snapshot = {}
+        result.append((row["id"], row["created_at"], row["reason"], snapshot))
+    return result
+
+
+def get_latest_server_backup(guild_id: int):
+    backups = get_server_backups(guild_id, 1)
+    return backups[0] if backups else None
+
+
+def create_case(
+    guild_id: int,
+    action: str,
+    target_id: int | None,
+    moderator_id: int,
+    reason: str,
+    created_at: str,
+    duration: int | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> int:
+    import json
+    connection = connect()
+    row = connection.execute(
+        "SELECT COALESCE(MAX(case_id), 0) + 1 AS next_id FROM mod_cases WHERE guild_id = ?",
+        (guild_id,),
+    ).fetchone()
+    case_id = int(row["next_id"])
+    connection.execute(
+        """INSERT INTO mod_cases
+        (guild_id, case_id, action, target_id, moderator_id, reason, created_at, duration, metadata_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            guild_id, case_id, action, target_id, moderator_id, reason, created_at,
+            duration, json.dumps(metadata or {}, ensure_ascii=False),
+        ),
+    )
+    connection.commit()
+    connection.close()
+    return case_id
+
+
+def get_case(guild_id: int, case_id: int):
+    connection = connect()
+    row = connection.execute(
+        "SELECT * FROM mod_cases WHERE guild_id = ? AND case_id = ?",
+        (guild_id, case_id),
+    ).fetchone()
+    connection.close()
+    return row
+
+
+def get_member_cases(guild_id: int, user_id: int, limit: int = 15):
+    connection = connect()
+    rows = connection.execute(
+        "SELECT * FROM mod_cases WHERE guild_id = ? AND target_id = ? ORDER BY case_id DESC LIMIT ?",
+        (guild_id, user_id, limit),
+    ).fetchall()
+    connection.close()
+    return rows
