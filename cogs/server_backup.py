@@ -272,6 +272,15 @@ class ServerBackup(commands.Cog):
                     continue
             role_map[int(data["id"])] = role
 
+        for data in sorted(snapshot.get("roles", []), key=lambda item: item.get("position", 0)):
+            role = role_map.get(int(data["id"]))
+            if role is None or role >= guild.me.top_role:
+                continue
+            try:
+                await guild.edit_role_positions(positions={role: int(data.get("position", 1))}, reason="Aishu server recovery")
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+
         ordered = sorted(snapshot.get("channels", []), key=lambda item: (item["type"] != "category", item.get("position", 0)))
         for data in ordered:
             existing = discord.utils.get(guild.channels, name=data["name"])
