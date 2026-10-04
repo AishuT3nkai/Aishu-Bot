@@ -21,3 +21,5 @@ jobs:
         run: python -c "from utils.database import connect; db = connect(); db.execute('SELECT 1'); db.close()"
       - name: Import feature modules
         run: python -c "import cogs.automod, cogs.antiraid, cogs.economy, cogs.community_tools, cogs.server_backup"
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -v
