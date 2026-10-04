@@ -9,13 +9,14 @@ load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-MODERATION_COMMANDS = {"warn", "warnings", "clearwarnings", "timeout", "untimeout", "kick", "ban", "unban", "purge", "slowmode", "lock", "unlock", "automod"}
+MODERATION_COMMANDS = {"warn", "warnings", "clearwarnings", "timeout", "untimeout", "kick", "ban", "unban", "purge", "slowmode", "lock", "unlock", "automod", "antiraid"}
 FUN_COMMANDS = {"8ball", "coinflip", "dice", "choose", "ship", "rate", "rps"}
 
 EXTENSIONS = (
     "cogs.community",
     "cogs.moderation",
     "cogs.automod",
+    "cogs.antiraid",
     "cogs.server",
     "cogs.verification",
     "cogs.welcome",
