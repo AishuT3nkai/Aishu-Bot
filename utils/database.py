@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS reports (
     status TEXT NOT NULL DEFAULT 'open',
     created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS automod_config (\n    guild_id INTEGER PRIMARY KEY,\n    config_json TEXT NOT NULL\n);\nCREATE TABLE IF NOT EXISTS birthdays (
+CREATE TABLE IF NOT EXISTS antiraid_config (\n    guild_id INTEGER PRIMARY KEY,\n    config_json TEXT NOT NULL\n);\nCREATE TABLE IF NOT EXISTS automod_config (\n    guild_id INTEGER PRIMARY KEY,\n    config_json TEXT NOT NULL\n);\nCREATE TABLE IF NOT EXISTS birthdays (
     guild_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
     month INTEGER NOT NULL,
@@ -318,6 +318,33 @@ def set_automod_config(guild_id: int, config: dict[str, Any]) -> None:
     connection = connect()
     connection.execute(
         """INSERT INTO automod_config (guild_id, config_json)
+        VALUES (?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET config_json = excluded.config_json""",
+        (guild_id, json.dumps(config, ensure_ascii=False)),
+    )
+    connection.commit()
+    connection.close()
+
+
+def get_antiraid_config(guild_id: int) -> dict[str, Any]:
+    import json
+    connection = connect()
+    row = connection.execute("SELECT config_json FROM antiraid_config WHERE guild_id = ?", (guild_id,)).fetchone()
+    connection.close()
+    if not row:
+        return {}
+    try:
+        value = json.loads(row["config_json"])
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def set_antiraid_config(guild_id: int, config: dict[str, Any]) -> None:
+    import json
+    connection = connect()
+    connection.execute(
+        """INSERT INTO antiraid_config (guild_id, config_json)
         VALUES (?, ?)
         ON CONFLICT(guild_id) DO UPDATE SET config_json = excluded.config_json""",
         (guild_id, json.dumps(config, ensure_ascii=False)),
