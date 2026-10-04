@@ -170,6 +170,7 @@ class ServerBackup(commands.Cog):
         if len(events) < NUKE_DELETE_THRESHOLD:
             return
 
+        event_count = len(events)
         events.clear()
         backup = get_latest_server_backup(guild.id)
         if backup is None:
@@ -177,7 +178,6 @@ class ServerBackup(commands.Cog):
             return
 
         await self._announce(guild, f"Potential nuke detected: {event_count} rapid {kind} deletions. Latest safe snapshot is #{backup[0]}. ")
-        await self._snapshot(guild, f"nuke detection marker: {event_count} {kind} deletions")
 
     async def _announce(self, guild: discord.Guild, text: str):
         me = guild.me
