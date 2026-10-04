@@ -75,7 +75,8 @@ class Moderation(commands.Cog):
             await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes), reason=reason)
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not timeout that member: {error}", delete_after=8); return
-        case_id = create_case(ctx.guild.id, "timeout", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat(), duration=minutes)\n        await send_modlog(ctx.guild, "Member Timed Out", f"**Member:** {user.mention}\\n**Moderator:** {ctx.author.mention}\\n**Duration:** {minutes} minute(s)\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.red())
+        case_id = create_case(ctx.guild.id, "timeout", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat(), duration=minutes)
+        await send_modlog(ctx.guild, "Member Timed Out", f"**Member:** {user.mention}\\n**Moderator:** {ctx.author.mention}\\n**Duration:** {minutes} minute(s)\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.red())
         await ctx.send(f"Timed out {user.mention} for {minutes} minute(s) | Case #{case_id}.", delete_after=10)
 
     @commands.command()
