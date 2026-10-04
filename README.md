@@ -247,3 +247,38 @@ The dashboard currently provides the secure login and admin UI shell. A bot API 
     requirements.txt
 
 The bot is intentionally split into cogs so Community features can grow without turning bot.py into one large file.
+
+
+## Security / Disaster Recovery
+
+### Automod v2
+- Role/channel exemptions
+- Moderator exemptions
+- Escalation mode: delete -> warn -> timeout
+- Safer keyword matching
+- Action cooldown and detailed mod-log
+
+### Anti-Raid v2
+- Join-spike detection
+- New-account threshold
+- Bot-join burst detection
+- User whitelist
+- Permission-preserving lockdown
+
+### Moderation Cases
+- Case IDs for moderation actions
+- `,case <id>`
+- `,history @member`
+- Persistent SQLite case history
+
+### Server Backup / Nuke Recovery
+- Rolling pre-raid snapshots every 15 minutes
+- Server name, roles, role permissions/hierarchy, channels/categories, overwrites
+- Member role assignments for members still present
+- Recent message/embed backup per text channel
+- Automatic nuke marker after rapid channel/role deletion
+- `,server backups`
+- `,server backup`
+- `,server restore <backup_id>`
+
+Discord does not allow a bot to forcibly move members to another server. Members who are no longer present cannot have their roles restored there automatically. Message attachments and original message timestamps are also not guaranteed to be reproducible.
