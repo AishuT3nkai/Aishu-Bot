@@ -167,8 +167,8 @@ class ServerBackup(commands.Cog):
             await self._snapshot(guild, f"emergency {kind} deletion")
             return
 
-        await self._announce(guild, f"Potential nuke detected: {len(events)} rapid {kind} deletions. Latest safe snapshot is #{backup[0]}.")
-        await self._snapshot(guild, f"nuke detection marker: {kind} deletion")
+        await self._announce(guild, f"Potential nuke detected: {event_count} rapid {kind} deletions. Latest safe snapshot is #{backup[0]}. ")
+        await self._snapshot(guild, f"nuke detection marker: {event_count} {kind} deletions")
 
     async def _announce(self, guild: discord.Guild, text: str):
         me = guild.me
