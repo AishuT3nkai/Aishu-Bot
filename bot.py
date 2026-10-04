@@ -20,6 +20,8 @@ EXTENSIONS = (
     "cogs.birthday",
     "cogs.reviews",
     "cogs.introduction",
+    "cogs.utility",
+    "cogs.fun",
 )
 
 
