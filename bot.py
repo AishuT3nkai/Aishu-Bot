@@ -26,6 +26,7 @@ EXTENSIONS = (
     "cogs.reviews",
     "cogs.introduction",
     "cogs.utility",
+    "cogs.community_tools",
     "cogs.fun",
 )
 
