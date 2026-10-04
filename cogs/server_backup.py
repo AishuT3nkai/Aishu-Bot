@@ -71,6 +71,7 @@ class ServerBackup(commands.Cog):
                 "guild": {"name": guild.name, "description": guild.description or ""},
                 "roles": [],
                 "channels": [],
+                "members": [],
             }
 
             for role in sorted(guild.roles, key=lambda r: r.position):
@@ -84,6 +85,14 @@ class ServerBackup(commands.Cog):
                     "mentionable": role.mentionable,
                     "permissions": role.permissions.value,
                     "position": role.position,
+                })
+
+            for member in guild.members:
+                if member.bot:
+                    continue
+                snapshot["members"].append({
+                    "id": member.id,
+                    "roles": [role.id for role in member.roles if not role.is_default() and not role.managed],
                 })
 
             for channel in sorted(guild.channels, key=lambda c: (getattr(c, "position", 0), c.id)):
@@ -300,6 +309,18 @@ class ServerBackup(commands.Cog):
                 except (discord.Forbidden, discord.HTTPException):
                     continue
             channel_map[int(data["id"])] = channel
+
+        for member_data in snapshot.get("members", []):
+            member = guild.get_member(int(member_data["id"]))
+            if member is None:
+                continue
+            roles = [role_map[int(role_id)] for role_id in member_data.get("roles", []) if int(role_id) in role_map]
+            roles = [role for role in roles if role < guild.me.top_role]
+            if roles:
+                try:
+                    await member.add_roles(*roles, reason="Aishu server recovery")
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
 
         for data in snapshot.get("channels", []):
             channel = channel_map.get(int(data["id"]))
