@@ -174,7 +174,7 @@ class ServerBackup(commands.Cog):
         events.clear()
         backup = get_latest_server_backup(guild.id)
         if backup is None:
-            await self._snapshot(guild, f"emergency {kind} deletion")
+            await self._announce(guild, f"Potential nuke detected: {event_count} rapid {kind} deletions, but no earlier backup exists. Create a backup immediately after reviewing the server.")
             return
 
         await self._announce(guild, f"Potential nuke detected: {event_count} rapid {kind} deletions. Latest safe snapshot is #{backup[0]}. ")
