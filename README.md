@@ -37,27 +37,37 @@ Aishu is organized around four practical areas: **community, moderation, utility
 - /permissions — inspect important effective permissions.
 
 ### Fun
-- /8ball — magic 8-ball.
-- /coinflip — coin flip.
-- /dice — dice roll.
-- /choose — choose from a list.
-- /ship — playful compatibility score.
-- /rate — playful rating.
-- /rps — rock-paper-scissors.
+- .8ball
+- .coinflip
+- .dice
+- .choose
+- .ship
+- .rate
+- .rps
+
+### Leveling and Economy
+- .level
+- .balance
+- .daily
+- .leaderboard
+- XP has a 60-second per-user cooldown.
+- Daily rewards have a 24-hour cooldown.
 
 ### Moderation
-- /warn
-- /warnings
-- /clearwarnings
-- /timeout
-- /untimeout
-- /kick
-- /ban
-- /unban
-- /purge
-- /slowmode
-- /lock
-- /unlock
+- ,warn
+- ,warnings
+- ,clearwarnings
+- ,timeout
+- ,untimeout
+- ,kick
+- ,ban
+- ,unban
+- ,purge
+- ,slowmode
+- ,lock
+- ,unlock
+- ,automod
+- ,antiraid
 
 Moderation currently uses Discord command permissions plus hierarchy checks. The bot refuses to act on the server owner, equal/higher roles, or members above the bot's highest role.
 
@@ -122,15 +132,48 @@ Only month and day are stored for birthdays.
 
 Complex administration is intended to move to the private web dashboard later.
 
+## Custom Automod
+
+- ,automod — show current configuration.
+- ,automod enable / disable
+- ,automod spam on|off [messages] [seconds]
+- ,automod duplicates on|off [messages] [seconds]
+- ,automod mentions on|off [maximum]
+- ,automod links on|off
+- ,automod invites on|off
+- ,automod keywords add/remove
+- ,automod action delete|warn|timeout [minutes]
+
+Custom automod is disabled by default per server. Rule configuration is stored in SQLite; rate tracking stays in memory.
+
+## Anti-Raid
+
+- ,antiraid — show status.
+- ,antiraid enable / disable
+- ,antiraid threshold [joins] [seconds]
+- ,antiraid duration [seconds]
+- ,antiraid lock / unlock
+
+Anti-raid is disabled by default per server. Automatic lockdown only changes channels whose @everyone send_messages overwrite is unset, so pre-existing explicit channel rules are not overwritten.
+
+## Community Tools
+
+- /rolepanel — create a persistent role-selection panel.
+- /announcement — open an embed announcement builder with optional image URL.
+
 ## Quality and safety
 
-- Slash commands are the primary interaction model.
+- / commands are used for simple utility and community tools.
+- , commands are reserved for moderation and security controls.
+- . commands are used for games, fun, leveling and economy.
 - Bot responses disable automatic mention parsing to reduce mention-injection risk.
 - Moderation actions are protected by Discord permissions and role-hierarchy checks.
 - Important moderation actions can be sent to a configured log channel.
 - User-submitted reports and suggestions are routed to configured staff channels.
 - No passwords, tokens, IP addresses, email addresses, or other Discord credentials are requested.
-- Discord's native AutoMod should be used alongside Aishu for keyword, spam, mention-spam, and raid protection; a custom bot should complement rather than replace Discord's safety controls. citeturn1search7turn1search2
+- Discord's native AutoMod can still be used alongside Aishu as an additional safety layer.
+- Message Content Intent is required for prefix commands and custom message automod.
+- Server Members Intent is required for member join detection and other member-based features.
 
 ## Verification
 
