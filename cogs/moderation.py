@@ -75,7 +75,7 @@ class Moderation(commands.Cog):
             await user.timeout(discord.utils.utcnow() + timedelta(minutes=minutes), reason=reason)
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not timeout that member: {error}", delete_after=8); return
-        await send_modlog(ctx.guild, "Member Timed Out", f"**Member:** {user.mention}\n**Moderator:** {ctx.author.mention}\n**Duration:** {minutes} minute(s)\n**Reason:** {reason}", discord.Color.red())
+        case_id = create_case(ctx.guild.id, "timeout", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat(), duration=minutes)\n        await send_modlog(ctx.guild, "Member Timed Out", f"**Member:** {user.mention}\\n**Moderator:** {ctx.author.mention}\\n**Duration:** {minutes} minute(s)\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.red())
         await ctx.send(f"Timed out {user.mention} for {minutes} minute(s) | Case #{case_id}.", delete_after=10)
 
     @commands.command()
@@ -90,7 +90,7 @@ class Moderation(commands.Cog):
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not remove that timeout: {error}", delete_after=8); return
         case_id = create_case(ctx.guild.id, "untimeout", user.id, ctx.author.id, "Timeout removed", datetime.now(timezone.utc).isoformat())
-        await send_modlog(ctx.guild, "Timeout Removed", f"**Member:** {user.mention}\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}", discord.Color.green())
+        await send_modlog(ctx.guild, "Timeout Removed", f"**Member:** {user.mention}\n**Moderator:** {ctx.author.mention}\n**Case:** #{case_id}", discord.Color.green())
         await ctx.send(f"Removed timeout from {user.mention}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
@@ -104,7 +104,7 @@ class Moderation(commands.Cog):
             await user.kick(reason=reason)
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not kick that member: {error}", delete_after=8); return
-        await send_modlog(ctx.guild, "Member Kicked", f"**Member:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.red())
+        case_id = create_case(ctx.guild.id, "kick", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())\n        await send_modlog(ctx.guild, "Member Kicked", f"**Member:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.red())
         await ctx.send(f"Kicked {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
@@ -118,7 +118,7 @@ class Moderation(commands.Cog):
             await user.ban(reason=reason, delete_message_seconds=0)
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not ban that member: {error}", delete_after=8); return
-        await send_modlog(ctx.guild, "Member Banned", f"**Member:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.dark_red())
+        case_id = create_case(ctx.guild.id, "ban", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())\n        await send_modlog(ctx.guild, "Member Banned", f"**Member:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.dark_red())
         await ctx.send(f"Banned {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
@@ -132,7 +132,7 @@ class Moderation(commands.Cog):
             await ctx.guild.unban(user, reason=reason)
         except (discord.NotFound, discord.HTTPException):
             await ctx.send("That user is not banned or could not be unbanned.", delete_after=8); return
-        await send_modlog(ctx.guild, "User Unbanned", f"**User:** {user} ({user.id})\n**Moderator:** {ctx.author.mention}\n**Reason:** {reason}", discord.Color.green())
+        case_id = create_case(ctx.guild.id, "unban", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())\n        await send_modlog(ctx.guild, "User Unbanned", f"**User:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.green())
         await ctx.send(f"Unbanned {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
@@ -145,7 +145,7 @@ class Moderation(commands.Cog):
             return
         deleted = await ctx.channel.purge(limit=amount + 1)
         count = max(0, len(deleted) - 1)
-        await send_modlog(ctx.guild, "Messages Purged", f"**Channel:** {ctx.channel.mention}\n**Moderator:** {ctx.author.mention}\n**Deleted:** {count}", discord.Color.orange())
+        case_id = create_case(ctx.guild.id, "purge", None, ctx.author.id, f"Purged {count} messages in #{ctx.channel.name}", datetime.now(timezone.utc).isoformat(), metadata={"channel_id": ctx.channel.id, "count": count})\n        await send_modlog(ctx.guild, "Messages Purged", f"**Channel:** {ctx.channel.mention}\\n**Moderator:** {ctx.author.mention}\\n**Deleted:** {count}\\n**Case:** #{case_id}", discord.Color.orange())
         await ctx.send(f"Deleted {count} message(s). Case #{case_id}.", delete_after=5)
 
     @commands.command()
@@ -212,7 +212,8 @@ class Moderation(commands.Cog):
             for row in rows
         ]
         await ctx.send(embed=discord.Embed(title=f"Moderation History — {user.display_name}", description="\n".join(lines)))
-\n    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
+
+    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.MissingPermissions):
             await ctx.send("You do not have permission to use this moderation command.", delete_after=8)
         elif isinstance(error, commands.MissingRequiredArgument):
