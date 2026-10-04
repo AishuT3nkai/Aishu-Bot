@@ -89,7 +89,8 @@ CREATE TABLE IF NOT EXISTS role_panels (
 CREATE TABLE IF NOT EXISTS automod_config (
     guild_id INTEGER PRIMARY KEY,
     config_json TEXT NOT NULL
-);\nCREATE TABLE IF NOT EXISTS birthdays (
+);
+CREATE TABLE IF NOT EXISTS birthdays (
     guild_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
     month INTEGER NOT NULL,
