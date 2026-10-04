@@ -106,8 +106,9 @@ class AntiRaid(commands.Cog):
             joins.popleft()
         joins.append(now)
         if len(joins) >= int(config["joins"]):
+            join_count = len(joins)
             joins.clear()
-            await self._lockdown(member.guild, f"{len(joins)} joins detected within {window} seconds.")
+            await self._lockdown(member.guild, f"{join_count} joins detected within {window} seconds.")
 
     @commands.group(name="antiraid", invoke_without_command=True)
     @commands.guild_only()
