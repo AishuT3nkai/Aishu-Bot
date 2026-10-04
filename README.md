@@ -13,6 +13,8 @@ Members choose with /language. Users with Manage Server receive administrative c
 
 ## Community commands
 
+Aishu is organized around four practical areas: **community, moderation, utility, and fun**. The goal is to cover common server needs without turning the bot into a command dump.
+
 ### Member
 - /introduce — create or update Name, Date of birth, Age, Origin and City.
 - /profile — view a member's self-declared introduction.
@@ -25,6 +27,23 @@ Members choose with /language. Users with Manage Server receive administrative c
 - /report — submit a private community report.
 - /verify — run the configured verification check.
 - /verificationinfo — public verification/account-age information.
+
+### Utility
+- /ping — bot latency.
+- /botinfo — runtime and bot information.
+- /membercount — human, bot and total member counts.
+- /channelinfo — text-channel information.
+- /roleinfo — role information.
+- /permissions — inspect important effective permissions.
+
+### Fun
+- /8ball — magic 8-ball.
+- /coinflip — coin flip.
+- /dice — dice roll.
+- /choose — choose from a list.
+- /ship — playful compatibility score.
+- /rate — playful rating.
+- /rps — rock-paper-scissors.
 
 ### Moderation
 - /warn
@@ -39,6 +58,8 @@ Members choose with /language. Users with Manage Server receive administrative c
 - /slowmode
 - /lock
 - /unlock
+
+Moderation currently uses Discord command permissions plus hierarchy checks. The bot refuses to act on the server owner, equal/higher roles, or members above the bot's highest role.
 
 Moderation actions can be written to the configured moderation-log channel.
 
@@ -100,6 +121,20 @@ Only month and day are stored for birthdays.
 - /config view
 
 Complex administration is intended to move to the private web dashboard later.
+
+## Quality and safety
+
+- Slash commands are the primary interaction model.
+- Bot responses disable automatic mention parsing to reduce mention-injection risk.
+- Moderation actions are protected by Discord permissions and role-hierarchy checks.
+- Important moderation actions can be sent to a configured log channel.
+- User-submitted reports and suggestions are routed to configured staff channels.
+- No passwords, tokens, IP addresses, email addresses, or other Discord credentials are requested.
+- Discord's native AutoMod should be used alongside Aishu for keyword, spam, mention-spam, and raid protection; a custom bot should complement rather than replace Discord's safety controls. citeturn1search7turn1search2
+
+## Verification
+
+CI runs on pushes and pull requests and currently performs dependency installation plus Python compilation checks.
 
 ## Permissions
 
