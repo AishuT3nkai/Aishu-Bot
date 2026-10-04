@@ -495,8 +495,12 @@ def create_server_backup(guild_id: int, reason: str, snapshot: dict[str, Any]) -
         "INSERT INTO server_backups (guild_id, created_at, reason, snapshot_json) VALUES (?, ?, ?, ?)",
         (guild_id, __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), reason, json.dumps(snapshot, ensure_ascii=False)),
     )
-    connection.commit()
     backup_id = int(cursor.lastrowid)
+    connection.execute(
+        "DELETE FROM server_backups WHERE guild_id = ? AND id NOT IN (SELECT id FROM server_backups WHERE guild_id = ? ORDER BY id DESC LIMIT 96)",
+        (guild_id, guild_id),
+    )
+    connection.commit()
     connection.close()
     return backup_id
 
