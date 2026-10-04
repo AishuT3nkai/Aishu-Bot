@@ -1,13 +1,20 @@
 import random
+import re
 import time
 import discord
 from discord.ext import commands
 from utils.database import get_economy, update_economy, get_economy_leaderboard
 
+URL_ONLY_RE = re.compile(r"^(?:https?://|www\\.)\\S+$", re.IGNORECASE)
+MIN_MESSAGE_LENGTH = 5
+XP_COOLDOWN_SECONDS = 60
+DAILY_XP_CAP = 300
+
+
 class Economy(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._xp_cooldown: dict[tuple[int, int], float] = {}
+        self._recent_content: dict[tuple[int, int], tuple[str, float]] = {}
 
     @staticmethod
     def level_for_xp(xp: int) -> int:
@@ -18,19 +25,30 @@ class Economy(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if not message.guild or message.author.bot or not message.content.strip():
+        if not message.guild or message.author.bot or not isinstance(message.author, discord.Member):
+            return
+        content = message.content.strip()
+        if len(content) < MIN_MESSAGE_LENGTH or URL_ONLY_RE.fullmatch(content):
+            return
+        if content.startswith((",", ".", "/", "!", "?")):
             return
         member = message.author
-        if not isinstance(member, discord.Member):
-            return
         key = (message.guild.id, member.id)
         now = time.time()
-        if now - self._xp_cooldown.get(key, 0) < 60:
-            return
-        self._xp_cooldown[key] = now
-
         profile = get_economy(message.guild.id, member.id)
-        gained = random.randint(5, 10)
+        if now - float(profile["last_xp_at"]) < XP_COOLDOWN_SECONDS:
+            return
+        normalized = " ".join(content.casefold().split())
+        recent = self._recent_content.get(key)
+        if recent and recent[0] == normalized and now - recent[1] < 3600:
+            return
+        self._recent_content[key] = (normalized, now)
+
+        utc_day = time.strftime("%Y-%m-%d", time.gmtime(now))
+        earned_today = int(profile["xp_daily"]) if profile["xp_day"] == utc_day else 0
+        if earned_today >= DAILY_XP_CAP:
+            return
+        gained = min(random.randint(5, 10), DAILY_XP_CAP - earned_today)
         new_xp = int(profile["xp"]) + gained
         new_level = self.level_for_xp(new_xp)
         update_economy(
@@ -39,6 +57,8 @@ class Economy(commands.Cog):
             xp=new_xp,
             level=new_level,
             last_xp_at=now,
+            xp_day=utc_day,
+            xp_daily=earned_today + gained,
         )
         if new_level > int(profile["level"]):
             await message.channel.send(
