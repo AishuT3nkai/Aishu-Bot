@@ -140,6 +140,9 @@ class CommunityTools(commands.Cog):
         role9: discord.Role | None = None,
         role10: discord.Role | None = None,
     ):
+        if not isinstance(interaction.user, discord.Member) or not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message("You need Manage Roles permission.", ephemeral=True)
+            return
         roles = [role for role in (role1, role2, role3, role4, role5, role6, role7, role8, role9, role10) if role]
         bot_member = interaction.guild.me
         if bot_member is None:
@@ -251,6 +254,13 @@ class CommunityTools(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(channel="Channel where the announcement will be posted")
     async def announcement(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        if not isinstance(interaction.user, discord.Member) or not interaction.user.guild_permissions.manage_guild:
+            await interaction.response.send_message("You need Manage Server permission.", ephemeral=True)
+            return
+        bot_member = interaction.guild.me
+        if bot_member is None or not channel.permissions_for(bot_member).send_messages or not channel.permissions_for(bot_member).embed_links:
+            await interaction.response.send_message("I need Send Messages and Embed Links permissions in that channel.", ephemeral=True)
+            return
         await interaction.response.send_modal(AnnouncementModal(channel))
 
 async def setup(bot: commands.Bot):
