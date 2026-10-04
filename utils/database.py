@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS economy (
     coins INTEGER NOT NULL DEFAULT 0,
     last_xp_at REAL NOT NULL DEFAULT 0,
     daily_at REAL NOT NULL DEFAULT 0,
+    xp_day TEXT NOT NULL DEFAULT '',
+    xp_daily INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (guild_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS role_panels (
@@ -136,6 +138,11 @@ def connect() -> sqlite3.Connection:
     columns = {row["name"] for row in connection.execute("PRAGMA table_info(guild_config)").fetchall()}
     if "birthday_channel_id" not in columns:
         connection.execute("ALTER TABLE guild_config ADD COLUMN birthday_channel_id INTEGER")
+    economy_columns = {row["name"] for row in connection.execute("PRAGMA table_info(economy)").fetchall()}
+    if "xp_day" not in economy_columns:
+        connection.execute("ALTER TABLE economy ADD COLUMN xp_day TEXT NOT NULL DEFAULT ''")
+    if "xp_daily" not in economy_columns:
+        connection.execute("ALTER TABLE economy ADD COLUMN xp_daily INTEGER NOT NULL DEFAULT 0")
 
     connection.commit()
     return connection
@@ -425,7 +432,7 @@ def get_economy(guild_id: int, user_id: int) -> dict[str, Any]:
 
 
 def update_economy(guild_id: int, user_id: int, **values: Any) -> None:
-    allowed = {"xp", "level", "coins", "last_xp_at", "daily_at"}
+    allowed = {"xp", "level", "coins", "last_xp_at", "daily_at", "xp_day", "xp_daily"}
     values = {key: value for key, value in values.items() if key in allowed}
     if not values:
         return
