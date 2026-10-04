@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS antiraid_config (
     guild_id INTEGER PRIMARY KEY,
     config_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS economy (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    xp INTEGER NOT NULL DEFAULT 0,
+    level INTEGER NOT NULL DEFAULT 0,
+    coins INTEGER NOT NULL DEFAULT 0,
+    last_xp_at REAL NOT NULL DEFAULT 0,
+    daily_at REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (guild_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS automod_config (
     guild_id INTEGER PRIMARY KEY,
     config_json TEXT NOT NULL
@@ -358,3 +368,49 @@ def set_antiraid_config(guild_id: int, config: dict[str, Any]) -> None:
     )
     connection.commit()
     connection.close()
+
+
+def get_economy(guild_id: int, user_id: int) -> dict[str, Any]:
+    connection = connect()
+    row = connection.execute(
+        "SELECT * FROM economy WHERE guild_id = ? AND user_id = ?",
+        (guild_id, user_id),
+    ).fetchone()
+    if row is None:
+        connection.execute(
+            "INSERT INTO economy (guild_id, user_id) VALUES (?, ?)",
+            (guild_id, user_id),
+        )
+        connection.commit()
+        row = connection.execute(
+            "SELECT * FROM economy WHERE guild_id = ? AND user_id = ?",
+            (guild_id, user_id),
+        ).fetchone()
+    connection.close()
+    return dict(row)
+
+
+def update_economy(guild_id: int, user_id: int, **values: Any) -> None:
+    allowed = {"xp", "level", "coins", "last_xp_at", "daily_at"}
+    values = {key: value for key, value in values.items() if key in allowed}
+    if not values:
+        return
+    assignments = ", ".join(f"{key} = ?" for key in values)
+    params = list(values.values()) + [guild_id, user_id]
+    connection = connect()
+    connection.execute(
+        f"UPDATE economy SET {assignments} WHERE guild_id = ? AND user_id = ?",
+        params,
+    )
+    connection.commit()
+    connection.close()
+
+
+def get_economy_leaderboard(guild_id: int, limit: int = 10):
+    connection = connect()
+    rows = connection.execute(
+        "SELECT * FROM economy WHERE guild_id = ? ORDER BY level DESC, xp DESC, coins DESC LIMIT ?",
+        (guild_id, limit),
+    ).fetchall()
+    connection.close()
+    return rows
