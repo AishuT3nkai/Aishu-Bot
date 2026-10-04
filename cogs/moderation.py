@@ -105,7 +105,8 @@ class Moderation(commands.Cog):
             await user.kick(reason=reason)
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not kick that member: {error}", delete_after=8); return
-        case_id = create_case(ctx.guild.id, "kick", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())\n        await send_modlog(ctx.guild, "Member Kicked", f"**Member:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.red())
+        case_id = create_case(ctx.guild.id, "kick", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())
+        await send_modlog(ctx.guild, "Member Kicked", f"**Member:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.red())
         await ctx.send(f"Kicked {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
@@ -119,7 +120,8 @@ class Moderation(commands.Cog):
             await user.ban(reason=reason, delete_message_seconds=0)
         except (discord.Forbidden, discord.HTTPException) as error:
             await ctx.send(f"I could not ban that member: {error}", delete_after=8); return
-        case_id = create_case(ctx.guild.id, "ban", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())\n        await send_modlog(ctx.guild, "Member Banned", f"**Member:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.dark_red())
+        case_id = create_case(ctx.guild.id, "ban", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())
+        await send_modlog(ctx.guild, "Member Banned", f"**Member:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.dark_red())
         await ctx.send(f"Banned {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
@@ -133,7 +135,8 @@ class Moderation(commands.Cog):
             await ctx.guild.unban(user, reason=reason)
         except (discord.NotFound, discord.HTTPException):
             await ctx.send("That user is not banned or could not be unbanned.", delete_after=8); return
-        case_id = create_case(ctx.guild.id, "unban", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())\n        await send_modlog(ctx.guild, "User Unbanned", f"**User:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.green())
+        case_id = create_case(ctx.guild.id, "unban", user.id, ctx.author.id, reason, datetime.now(timezone.utc).isoformat())
+        await send_modlog(ctx.guild, "User Unbanned", f"**User:** {user} ({user.id})\\n**Moderator:** {ctx.author.mention}\\n**Case:** #{case_id}\\n**Reason:** {reason}", discord.Color.green())
         await ctx.send(f"Unbanned {user}. Case #{case_id}.", delete_after=10)
 
     @commands.command()
@@ -146,7 +149,8 @@ class Moderation(commands.Cog):
             return
         deleted = await ctx.channel.purge(limit=amount + 1)
         count = max(0, len(deleted) - 1)
-        case_id = create_case(ctx.guild.id, "purge", None, ctx.author.id, f"Purged {count} messages in #{ctx.channel.name}", datetime.now(timezone.utc).isoformat(), metadata={"channel_id": ctx.channel.id, "count": count})\n        await send_modlog(ctx.guild, "Messages Purged", f"**Channel:** {ctx.channel.mention}\\n**Moderator:** {ctx.author.mention}\\n**Deleted:** {count}\\n**Case:** #{case_id}", discord.Color.orange())
+        case_id = create_case(ctx.guild.id, "purge", None, ctx.author.id, f"Purged {count} messages in #{ctx.channel.name}", datetime.now(timezone.utc).isoformat(), metadata={"channel_id": ctx.channel.id, "count": count})
+        await send_modlog(ctx.guild, "Messages Purged", f"**Channel:** {ctx.channel.mention}\\n**Moderator:** {ctx.author.mention}\\n**Deleted:** {count}\\n**Case:** #{case_id}", discord.Color.orange())
         await ctx.send(f"Deleted {count} message(s). Case #{case_id}.", delete_after=5)
 
     @commands.command()
