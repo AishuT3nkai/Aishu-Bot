@@ -30,11 +30,7 @@ EXTENSIONS = (
 
 
 def command_prefix(bot: commands.Bot, message: discord.Message):
-    """Keep legacy message-command compatibility on the same '/' prefix.
-
-    Actual command registration is handled by hybrid commands, so Discord's
-    slash-command UI remains the primary interface.
-    """
+    """Use '/' as the only message-command prefix."""
     return "/"
 
 
@@ -49,20 +45,17 @@ class AishuBot(commands.Bot):
         connection = connect()
         connection.close()
 
-        # The older cogs were written with discord.ext.commands decorators.
-        # Convert those decorators to hybrid commands while they are imported,
-        # giving every command a real Discord slash-command registration without
-        # rewriting each cog's business logic in one risky sweep.
+        # Existing legacy commands keep their current implementation while
+        # standalone commands are also registered as Discord slash commands.
+        # Groups with nested subcommands remain message commands until they are
+        # flattened into Discord's one-level application-command structure.
         original_command = commands.command
-        original_group = commands.group
         commands.command = commands.hybrid_command
-        commands.group = commands.hybrid_group
         try:
             for extension in EXTENSIONS:
                 await self.load_extension(extension)
         finally:
             commands.command = original_command
-            commands.group = original_group
 
         synced = await self.tree.sync()
         print(f"Synced {len(synced)} application command(s).")
