@@ -9,9 +9,6 @@ load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-MODERATION_COMMANDS = {"warn", "warnings", "clearwarnings", "timeout", "untimeout", "kick", "ban", "unban", "purge", "slowmode", "lock", "unlock", "automod", "antiraid", "server", "case", "history"}
-FUN_COMMANDS = {"8ball", "coinflip", "dice", "choose", "ship", "rate", "rps", "level", "balance", "daily", "leaderboard"}
-
 EXTENSIONS = (
     "cogs.community",
     "cogs.moderation",
@@ -31,15 +28,15 @@ EXTENSIONS = (
     "cogs.fun",
 )
 
+
 def command_prefix(bot: commands.Bot, message: discord.Message):
-    content = message.content.lstrip()
-    if content.startswith(","):
-        name = content[1:].split(maxsplit=1)[0].casefold()
-        return "," if name in MODERATION_COMMANDS else "\x00"
-    if content.startswith("."):
-        name = content[1:].split(maxsplit=1)[0].casefold()
-        return "." if name in FUN_COMMANDS else "\x00"
-    return "\x00"
+    """Keep legacy message-command compatibility on the same '/' prefix.
+
+    Actual command registration is handled by hybrid commands, so Discord's
+    slash-command UI remains the primary interface.
+    """
+    return "/"
+
 
 class AishuBot(commands.Bot):
     def __init__(self):
@@ -51,15 +48,32 @@ class AishuBot(commands.Bot):
     async def setup_hook(self):
         connection = connect()
         connection.close()
-        for extension in EXTENSIONS:
-            await self.load_extension(extension)
-        await self.tree.sync()
+
+        # The older cogs were written with discord.ext.commands decorators.
+        # Convert those decorators to hybrid commands while they are imported,
+        # giving every command a real Discord slash-command registration without
+        # rewriting each cog's business logic in one risky sweep.
+        original_command = commands.command
+        original_group = commands.group
+        commands.command = commands.hybrid_command
+        commands.group = commands.hybrid_group
+        try:
+            for extension in EXTENSIONS:
+                await self.load_extension(extension)
+        finally:
+            commands.command = original_command
+            commands.group = original_group
+
+        synced = await self.tree.sync()
+        print(f"Synced {len(synced)} application command(s).")
 
     async def on_ready(self):
         print(f"Logged in as {self.user} ({self.user.id})")
         print(f"Connected to {len(self.guilds)} server(s).")
 
     async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
         await self.process_commands(message)
 
     async def on_app_command_error(self, interaction, error):
@@ -73,11 +87,13 @@ class AishuBot(commands.Bot):
         except discord.HTTPException:
             pass
 
+
 async def main():
     if not TOKEN:
         raise RuntimeError("DISCORD_TOKEN is missing from the environment.")
     async with AishuBot() as bot:
         await bot.start(TOKEN)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
