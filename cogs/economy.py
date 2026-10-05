@@ -1,8 +1,11 @@
 import random
 import re
 import time
+from datetime import datetime, timezone
+
 import discord
 from discord.ext import commands
+
 from utils.database import get_economy, update_economy, get_economy_leaderboard
 
 URL_ONLY_RE = re.compile(r"^(?:https?://|www\.)\S+$", re.IGNORECASE)
@@ -15,6 +18,15 @@ class Economy(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._recent_content: dict[tuple[int, int], tuple[str, float]] = {}
+
+    @staticmethod
+    def _embed(title: str, description: str) -> discord.Embed:
+        return discord.Embed(
+            title=title,
+            description=description,
+            color=discord.Color.blurple(),
+            timestamp=datetime.now(timezone.utc),
+        )
 
     @staticmethod
     def level_for_xp(xp: int) -> int:
@@ -30,7 +42,7 @@ class Economy(commands.Cog):
         content = message.content.strip()
         if len(content) < MIN_MESSAGE_LENGTH or URL_ONLY_RE.fullmatch(content):
             return
-        if content.startswith((",", ".", "/", "!", "?")):
+        if content.startswith(("/", "!", "?")):
             return
         member = message.author
         key = (message.guild.id, member.id)
@@ -61,12 +73,18 @@ class Economy(commands.Cog):
             xp_daily=earned_today + gained,
         )
         if new_level > int(profile["level"]):
-            await message.channel.send(
+            embed = self._embed(
+                "Level Up",
                 f"{member.mention} reached **Level {new_level}**.",
+            )
+            embed.set_footer(text=f"{message.guild.name} • Aishu")
+            await message.channel.send(
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions(users=[member]),
                 delete_after=10,
             )
 
-    @commands.command()
+    @commands.command(description="View your or another member's level.")
     @commands.guild_only()
     async def level(self, ctx: commands.Context, member: discord.Member | None = None):
         member = member or ctx.author
@@ -74,18 +92,26 @@ class Economy(commands.Cog):
         level = int(profile["level"])
         xp = int(profile["xp"])
         next_xp = 100 * (level + 1) * (level + 1)
-        await ctx.send(
-            f"**{member.display_name}** — Level **{level}** | XP **{xp}/{next_xp}**"
+        embed = self._embed(
+            "Level",
+            f"**Member:** {member.mention}\n**Level:** {level}\n**XP:** {xp}/{next_xp}",
         )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        await ctx.send(embed=embed)
 
-    @commands.command()
+    @commands.command(description="View your or another member's coin balance.")
     @commands.guild_only()
     async def balance(self, ctx: commands.Context, member: discord.Member | None = None):
         member = member or ctx.author
         profile = get_economy(ctx.guild.id, member.id)
-        await ctx.send(f"**{member.display_name}** has **{int(profile['coins'])}** coins.")
+        embed = self._embed(
+            "Balance",
+            f"**Member:** {member.mention}\n**Coins:** {int(profile['coins']):,}",
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        await ctx.send(embed=embed)
 
-    @commands.command()
+    @commands.command(description="Claim your daily coin reward.")
     @commands.guild_only()
     async def daily(self, ctx: commands.Context):
         profile = get_economy(ctx.guild.id, ctx.author.id)
@@ -94,7 +120,13 @@ class Economy(commands.Cog):
         if remaining > 0:
             hours = int(remaining // 3600)
             minutes = int((remaining % 3600) // 60)
-            await ctx.send(f"Daily reward is ready again in **{hours}h {minutes}m**.", delete_after=8)
+            await ctx.send(
+                embed=self._embed(
+                    "Daily Reward",
+                    f"Your next reward is ready in **{hours}h {minutes}m**.",
+                ),
+                delete_after=8,
+            )
             return
         reward = random.randint(100, 250)
         update_economy(
@@ -103,25 +135,24 @@ class Economy(commands.Cog):
             coins=int(profile["coins"]) + reward,
             daily_at=now,
         )
-        await ctx.send(f"You received **{reward}** coins from your daily reward.")
+        await ctx.send(embed=self._embed("Daily Reward", f"You received **{reward:,} coins**."))
 
-    @commands.command(name="leaderboard")
+    @commands.command(name="leaderboard", description="View the server economy leaderboard.")
     @commands.guild_only()
     async def leaderboard(self, ctx: commands.Context):
         rows = get_economy_leaderboard(ctx.guild.id, 10)
         if not rows:
-            await ctx.send("No economy data yet.")
+            await ctx.send(embed=self._embed("Leaderboard", "No economy data yet."))
             return
         lines = []
         for index, row in enumerate(rows, 1):
             lines.append(
-                f"**{index}.** <@{row['user_id']}> — Level {row['level']} | {row['xp']} XP | {row['coins']} coins"
+                f"**{index}.** <@{row['user_id']}> — Level **{row['level']}** · {row['xp']:,} XP · {row['coins']:,} coins"
             )
-        await ctx.send(embed=discord.Embed(
-            title="Aishu Leaderboard",
-            description="\n".join(lines),
-            color=discord.Color.blurple(),
-        ))
+        embed = self._embed("Economy Leaderboard", "\n".join(lines))
+        embed.set_footer(text=f"Top {len(rows)} members • {ctx.guild.name}")
+        await ctx.send(embed=embed)
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Economy(bot))
