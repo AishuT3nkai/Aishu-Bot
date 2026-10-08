@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 from utils.database import connect
+from bridge import Bridge
 
 load_dotenv()
 
@@ -40,15 +41,12 @@ class AishuBot(commands.Bot):
         intents.members = True
         intents.message_content = True
         super().__init__(command_prefix=command_prefix, intents=intents)
+        self.bridge = Bridge(self)
 
     async def setup_hook(self):
         connection = connect()
         connection.close()
 
-        # Existing legacy commands keep their current implementation while
-        # standalone commands are also registered as Discord slash commands.
-        # Groups with nested subcommands remain message commands until they are
-        # flattened into Discord's one-level application-command structure.
         original_command = commands.command
         commands.command = commands.hybrid_command
         try:
@@ -59,6 +57,7 @@ class AishuBot(commands.Bot):
 
         synced = await self.tree.sync()
         print(f"Synced {len(synced)} application command(s).")
+        await self.bridge.start()
 
     async def on_ready(self):
         print(f"Logged in as {self.user} ({self.user.id})")
@@ -79,6 +78,10 @@ class AishuBot(commands.Bot):
                 await interaction.response.send_message(message, ephemeral=True)
         except discord.HTTPException:
             pass
+
+    async def close(self):
+        await self.bridge.close()
+        await super().close()
 
 
 async def main():
