@@ -109,6 +109,7 @@ class Bridge:
             raise web.HTTPBadRequest(text=f"Role {value} is not in this guild.")
         return value
 
+    @web.middleware
     async def auth(self, request: web.Request, handler):
         if not self.secret:
             raise web.HTTPServiceUnavailable(text="Bridge secret is not configured.")
