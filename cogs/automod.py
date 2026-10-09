@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
     "mention_enabled": True, "max_mentions": 5,
     "links_enabled": False, "invites_enabled": False,
     "keywords": [], "action": "delete", "timeout_minutes": 5,
-    "escalation": False, "exempt_roles": [], "exempt_channels": [], "action_cooldown": 5,
+    "escalation": True, "exempt_roles": [], "exempt_channels": [], "action_cooldown": 5,
 }
 
 class Automod(commands.Cog):
@@ -108,11 +108,9 @@ class Automod(commands.Cog):
         while history and now - history[0] > 600:
             history.popleft()
         history.append(now)
-        if len(history) >= 3:
+        if len(history) >= 2:
             return "timeout"
-        if len(history) == 2:
-            return "warn"
-        return "delete"
+        return "warn"
 
     async def _take_action(self, message, reason, config):
         action = self._escalated_action(message.guild.id, message.author.id, reason, config)
@@ -138,6 +136,15 @@ class Automod(commands.Cog):
                 self.bot.user.id if self.bot.user else 0, reason,
                 discord.utils.utcnow().isoformat(), metadata={"warning_id": warning_id},
             )
+            try:
+                await message.channel.send(
+                    f"{message.author.mention}, pesanmu dihapus karena melanggar aturan ({reason}). "
+                    "Ini peringatan pertama—silakan baca #rules. Pelanggaran berikutnya dapat membuatmu timeout.",
+                    delete_after=12,
+                    allowed_mentions=discord.AllowedMentions(users=True),
+                )
+            except (discord.Forbidden, discord.HTTPException):
+                pass
         elif action == "timeout" and isinstance(message.author, discord.Member):
             try:
                 minutes = max(1, min(60, int(config.get("timeout_minutes", 5))))
