@@ -12,12 +12,12 @@ URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
 INVITE_RE = re.compile(r"discord\.(?:gg|com/invite)/[A-Za-z0-9-]+", re.IGNORECASE)
 
 DEFAULT_CONFIG = {
-    "enabled": False,
+    "enabled": True,
     "spam_enabled": True, "spam_messages": 5, "spam_window": 8,
     "duplicate_enabled": True, "duplicate_messages": 3, "duplicate_window": 10,
     "mention_enabled": True, "max_mentions": 5,
     "links_enabled": False, "invites_enabled": False,
-    "keywords": [], "action": "delete", "timeout_minutes": 5,
+    "keywords": ["anjing", "bangsat", "bajingan", "kontol", "memek", "ngentot", "goblok", "tolol", "fuck", "fucking", "shit", "bitch", "asshole"], "action": "delete", "timeout_minutes": 5,
     "escalation": True, "exempt_roles": [], "exempt_channels": [], "action_cooldown": 5,
 }
 
