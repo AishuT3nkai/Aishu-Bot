@@ -579,10 +579,10 @@ class Bridge:
         guild = self._guild(request)
         config = get_automod_config(guild.id)
         defaults = {
-            "enabled": False, "spam_enabled": True, "spam_messages": 5, "spam_window": 8,
+            "enabled": True, "spam_enabled": True, "spam_messages": 5, "spam_window": 8,
             "duplicate_enabled": True, "duplicate_messages": 3, "duplicate_window": 10,
             "mention_enabled": True, "max_mentions": 5, "links_enabled": False,
-            "invites_enabled": False, "keywords": [], "action": "delete",
+            "invites_enabled": False, "keywords": ["anjing", "bangsat", "bajingan", "kontol", "memek", "ngentot", "goblok", "tolol", "fuck", "fucking", "shit", "bitch", "asshole"], "action": "delete",
             "timeout_minutes": 5, "escalation": True, "exempt_roles": [],
             "exempt_channels": [], "action_cooldown": 5,
         }
