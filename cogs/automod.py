@@ -33,7 +33,7 @@ class Automod(commands.Cog):
         config.update(get_automod_config(guild_id))
         config["exempt_roles"] = list(config.get("exempt_roles") or [])
         config["exempt_channels"] = list(config.get("exempt_channels") or [])
-        config["keywords"] = list(config.get("keywords") or [])
+        config["keywords"] = list(config.get("keywords") or DEFAULT_CONFIG["keywords"])
         return config
 
     def _exempt(self, message, config):
