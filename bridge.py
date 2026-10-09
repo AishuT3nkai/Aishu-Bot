@@ -8,7 +8,7 @@ from typing import Any
 import discord
 from aiohttp import web
 
-from utils.database import connect, ensure_guild, get_guild_config, update_guild_config
+from utils.database import connect, ensure_guild, get_automod_config, get_guild_config, set_automod_config, update_guild_config
 
 
 def _json(request: web.Request, status: int = 200, **data: Any) -> web.Response:
@@ -575,6 +575,76 @@ class Bridge:
         self._set_config(guild.id, "server", {"prefix": prefix})
         return await self.server_get(request)
 
+    async def automod_get(self, request: web.Request):
+        guild = self._guild(request)
+        config = get_automod_config(guild.id)
+        defaults = {
+            "enabled": False, "spam_enabled": True, "spam_messages": 5, "spam_window": 8,
+            "duplicate_enabled": True, "duplicate_messages": 3, "duplicate_window": 10,
+            "mention_enabled": True, "max_mentions": 5, "links_enabled": False,
+            "invites_enabled": False, "keywords": [], "action": "delete",
+            "timeout_minutes": 5, "escalation": True, "exempt_roles": [],
+            "exempt_channels": [], "action_cooldown": 5,
+        }
+        defaults.update(config)
+        return web.json_response(defaults)
+
+    async def automod_put(self, request: web.Request):
+        guild = self._guild(request)
+        data = await request.json()
+        current = get_automod_config(guild.id)
+        allowed = {
+            "enabled", "spam_enabled", "duplicate_enabled", "mention_enabled",
+            "links_enabled", "invites_enabled", "escalation",
+        }
+        config = dict(current)
+        for key in allowed:
+            if key in data:
+                config[key] = bool(data[key])
+        for key, low, high in (
+            ("spam_messages", 2, 20), ("spam_window", 2, 60),
+            ("duplicate_messages", 2, 20), ("duplicate_window", 2, 60),
+            ("max_mentions", 1, 20), ("timeout_minutes", 1, 60),
+            ("action_cooldown", 0, 60),
+        ):
+            if key in data:
+                try:
+                    value = int(data[key])
+                except (TypeError, ValueError):
+                    raise web.HTTPBadRequest(text=f"Invalid {key}.")
+                if not low <= value <= high:
+                    raise web.HTTPBadRequest(text=f"{key} must be between {low} and {high}.")
+                config[key] = value
+        if "action" in data:
+            action = str(data["action"]).casefold()
+            if action not in {"delete", "warn", "timeout"}:
+                raise web.HTTPBadRequest(text="Action must be delete, warn, or timeout.")
+            config["action"] = action
+        if "keywords" in data:
+            keywords = data["keywords"]
+            if not isinstance(keywords, list) or len(keywords) > 100:
+                raise web.HTTPBadRequest(text="Keywords must be a list of at most 100 items.")
+            cleaned = []
+            for item in keywords:
+                word = str(item).strip()
+                if not word or len(word) > 100:
+                    raise web.HTTPBadRequest(text="Each keyword must be 1-100 characters.")
+                if word.casefold() not in {x.casefold() for x in cleaned}:
+                    cleaned.append(word)
+            config["keywords"] = cleaned
+        for key, kind in (("exempt_roles", "role"), ("exempt_channels", "channel")):
+            if key in data:
+                values = data[key]
+                if not isinstance(values, list) or len(values) > 100:
+                    raise web.HTTPBadRequest(text=f"{key} must be a list of at most 100 IDs.")
+                config[key] = []
+                for value in values:
+                    valid = self._validate_id(value, kind, guild)
+                    if valid is not None:
+                        config[key].append(int(valid))
+        set_automod_config(guild.id, config)
+        return await self.automod_get(request)
+
     def app(self) -> web.Application:
         app = web.Application(middlewares=[self.auth])
         app.router.add_get("/health", self.health)
@@ -585,6 +655,8 @@ class Bridge:
         app.router.add_get("/api/guilds/{guild_id}/welcome", self.welcome_get)
         app.router.add_put("/api/guilds/{guild_id}/welcome", self.welcome_put)
         app.router.add_get("/api/guilds/{guild_id}/moderation", self.moderation_get)
+        app.router.add_get("/api/guilds/{guild_id}/automod", self.automod_get)
+        app.router.add_put("/api/guilds/{guild_id}/automod", self.automod_put)
         app.router.add_put("/api/guilds/{guild_id}/moderation", self.moderation_put)
         app.router.add_get("/api/guilds/{guild_id}/moderation/warnings", self.warnings_get)
         app.router.add_delete("/api/guilds/{guild_id}/moderation/warnings/{warning_id}", self.warning_delete)
