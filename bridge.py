@@ -589,6 +589,8 @@ class Bridge:
         defaults.update(config)
         if not defaults.get("keywords"):
             defaults["keywords"] = ["anjing", "bangsat", "bajingan", "kontol", "memek", "ngentot", "goblok", "tolol", "fuck", "fucking", "shit", "bitch", "asshole"]
+        defaults["exempt_roles"] = [str(value) for value in defaults.get("exempt_roles", [])]
+        defaults["exempt_channels"] = [str(value) for value in defaults.get("exempt_channels", [])]
         return web.json_response(defaults)
 
     async def automod_put(self, request: web.Request):
