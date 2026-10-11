@@ -159,6 +159,12 @@ class Automod(commands.Cog):
                 )
             except (discord.Forbidden, discord.HTTPException):
                 pass
+        bridge = getattr(self.bot, "bridge", None)
+        if bridge is not None:
+            import asyncio
+            asyncio.create_task(bridge.emit_webhook_event(message.guild.id, "moderation.action", {
+                "moderation": {"action": f"automod_{action}", "targetId": str(message.author.id)},
+            }))
         await self._modlog(message.guild, message, reason, action + (f" / Case #{case_id}" if case_id else ""))
 
     @commands.Cog.listener()
