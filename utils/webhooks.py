@@ -19,7 +19,6 @@ from utils.database import connect
 ALLOWED_EVENTS = {
     "member.joined",
     "member.verified",
-    "member.quarantined",
     "raid.detected",
     "raid.cleared",
     "moderation.action",
@@ -213,7 +212,7 @@ class WebhookManager:
             data = await request.json()
         except (ValueError, json.JSONDecodeError):
             raise web.HTTPBadRequest(text="Body must be valid JSON.")
-        endpoint, _ = await self._validate_endpoint(data.get("endpoint"))
+        endpoint, endpoint_host = await self._validate_endpoint(data.get("endpoint"))
         events = data.get("events")
         if not isinstance(events, list) or not events or len(events) > MAX_EVENTS:
             raise web.HTTPBadRequest(text="Select at least one supported event.")
@@ -234,6 +233,7 @@ class WebhookManager:
         connection.close()
         return web.json_response({
             "id": str(webhook_id),
+            "endpointHost": endpoint_host,
             "events": events,
             "enabled": True,
             "createdAt": now,
