@@ -319,3 +319,15 @@ Anti-Raid is disabled by default. Lockdown permissions depend on the bot's chann
 - `/announcement`: open a modal to send an embed announcement with an optional image URL.
 
 The bot needs Message Content Intent enabled in the Discord Developer Portal for prefix commands. Reaction-role mappings and role-panel configuration are stored in SQLite.
+
+
+## Dashboard webhooks
+
+The private dashboard bridge can manage signed outbound webhooks for a guild. Configure these environment variables on the bot host:
+
+- `BOT_API_SHARED_SECRET`: shared with the dashboard deployment; required for all bridge requests.
+- `BOT_WEBHOOK_ENCRYPTION_KEY`: a stable Fernet key used to encrypt destination URLs and signing secrets at rest. Generate one after installing requirements with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Keep it private and back it up; changing it without migrating stored values makes existing webhooks unreadable.
+
+The dashboard supports `member.joined`, `member.verified`, `raid.detected`, `raid.cleared`, and `moderation.action` events. Test deliveries use `webhook.test`. Each request includes `X-Aishu-Event`, `X-Aishu-Event-Id`, `X-Aishu-Timestamp`, and `X-Aishu-Signature`. The signature is `sha256=` followed by the lowercase hex HMAC-SHA256 of `timestamp + "." + exact_raw_request_body`, keyed with the one-time signing secret shown after webhook creation.
+
+Webhook destinations must use HTTPS and resolve to public IP addresses. Redirects are not followed. Delivery history stores status metadata only, not the full payload or destination URL. Retry policy is bounded to three attempts with short backoff; this is not a durable queue, so a bot restart during delivery can interrupt an in-flight event.

@@ -1,9 +1,22 @@
+import asyncio
 import discord
 from discord.ext import commands
 from datetime import datetime, timezone, timedelta
 from utils.database import add_warning, get_warnings, clear_warnings, get_guild_config, create_case, get_case, get_member_cases
 
+async def _emit_moderation_webhook(guild: discord.Guild, action: str):
+    state = getattr(guild, "_state", None)
+    get_client = getattr(state, "_get_client", None)
+    client = get_client() if callable(get_client) else None
+    bridge = getattr(client, "bridge", None)
+    if bridge is not None:
+        asyncio.create_task(bridge.emit_webhook_event(guild.id, "moderation.action", {
+            "moderation": {"action": action[:80]},
+        }))
+
+
 async def send_modlog(guild: discord.Guild, title: str, description: str, color: discord.Color):
+    await _emit_moderation_webhook(guild, title)
     config = get_guild_config(guild.id)
     channel = guild.get_channel(config.get("modlog_channel_id") or 0)
     if not isinstance(channel, discord.TextChannel):

@@ -77,6 +77,12 @@ class AntiRaid(commands.Cog):
             reason, discord.utils.utcnow().isoformat(),
             duration=int(config["lockdown_seconds"]),
         )
+        bridge = getattr(self.bot, "bridge", None)
+        if bridge is not None:
+            asyncio.create_task(bridge.emit_webhook_event(guild.id, "raid.detected", {
+                "raid": {"status": "detected", "reason": reason[:200], "lockedChannels": len(locked)},
+                "action": "lockdown",
+            }))
         await self._modlog(
             guild, "Anti-Raid Lockdown",
             f"Locked {len(locked)} channel(s) for {config['lockdown_seconds']} seconds.\nReason: {reason}\nCase: #{case_id}",
@@ -97,6 +103,7 @@ class AntiRaid(commands.Cog):
 
     async def _unlock(self, guild, automatic=False):
         locked = self._locked_channels.get(guild.id, {})
+        had_lockdown = bool(locked)
         restored = 0
         for channel_id, previous in list(locked.items()):
             channel = guild.get_channel(channel_id)
@@ -116,6 +123,12 @@ class AntiRaid(commands.Cog):
             except (discord.Forbidden, discord.HTTPException):
                 # Keep failed entries so a moderator can retry unlocking them.
                 continue
+        if had_lockdown and not locked:
+            bridge = getattr(self.bot, "bridge", None)
+            if bridge is not None:
+                asyncio.create_task(bridge.emit_webhook_event(guild.id, "raid.cleared", {
+                    "raid": {"status": "cleared", "clearedBy": "automatic" if automatic else "moderator", "restoredChannels": restored},
+                }))
         if not automatic:
             await self._modlog(guild, "Anti-Raid Unlocked", f"Restored {restored} channel(s).")
 
