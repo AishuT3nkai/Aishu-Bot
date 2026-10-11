@@ -190,20 +190,22 @@ class WebhookManager:
         guild = self._guild(request)
         connection = connect()
         rows = connection.execute(
-            "SELECT id, events_json, enabled, created_at, updated_at FROM dashboard_webhooks WHERE guild_id = ? ORDER BY id DESC",
+            "SELECT id, endpoint_enc, events_json, enabled, created_at, updated_at FROM dashboard_webhooks WHERE guild_id = ? ORDER BY id DESC",
             (guild.id,),
         ).fetchall()
         connection.close()
-        return web.json_response([
-            {
+        result = []
+        for row in rows:
+            endpoint_host = urlsplit(self._open(row["endpoint_enc"])).hostname
+            result.append({
                 "id": str(row["id"]),
+                "endpointHost": endpoint_host,
                 "events": json.loads(row["events_json"]),
                 "enabled": bool(row["enabled"]),
                 "createdAt": row["created_at"],
                 "updatedAt": row["updated_at"],
-            }
-            for row in rows
-        ])
+            })
+        return web.json_response(result)
 
     async def create_webhook(self, request: web.Request):
         guild = self._guild(request)
