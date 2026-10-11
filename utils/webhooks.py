@@ -25,6 +25,7 @@ ALLOWED_EVENTS = {
 }
 MAX_ENDPOINT_LENGTH = 2048
 MAX_EVENTS = len(ALLOWED_EVENTS)
+MAX_WEBHOOKS_PER_GUILD = 10
 
 
 def utc_now() -> str:
@@ -212,6 +213,16 @@ class WebhookManager:
             data = await request.json()
         except (ValueError, json.JSONDecodeError):
             raise web.HTTPBadRequest(text="Body must be valid JSON.")
+        if not isinstance(data, dict):
+            raise web.HTTPBadRequest(text="Body must be a JSON object.")
+        connection = connect()
+        count = connection.execute(
+            "SELECT COUNT(*) AS count FROM dashboard_webhooks WHERE guild_id = ?",
+            (guild.id,),
+        ).fetchone()["count"]
+        connection.close()
+        if int(count) >= MAX_WEBHOOKS_PER_GUILD:
+            raise web.HTTPTooManyRequests(text="This server has reached the webhook limit.")
         endpoint, endpoint_host = await self._validate_endpoint(data.get("endpoint"))
         events = data.get("events")
         if not isinstance(events, list) or not events or len(events) > MAX_EVENTS:
@@ -251,6 +262,8 @@ class WebhookManager:
             data = await request.json()
         except (ValueError, json.JSONDecodeError):
             raise web.HTTPBadRequest(text="Body must be valid JSON.")
+        if not isinstance(data, dict):
+            raise web.HTTPBadRequest(text="Body must be a JSON object.")
         endpoint_enc = row["endpoint_enc"]
         events_json = row["events_json"]
         enabled = int(row["enabled"])
