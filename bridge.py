@@ -9,6 +9,7 @@ import discord
 from aiohttp import web
 
 from utils.database import connect, ensure_guild, get_automod_config, get_guild_config, set_automod_config, update_guild_config
+from utils.webhooks import WebhookManager
 
 
 def _json(request: web.Request, status: int = 200, **data: Any) -> web.Response:
@@ -37,6 +38,7 @@ class Bridge:
         self.port = int(os.getenv("BOT_API_PORT", "8080"))
         self.runner: web.AppRunner | None = None
         self._ensure_schema()
+        self.webhooks = WebhookManager(bot)
 
     def _ensure_schema(self) -> None:
         connection = connect()
@@ -649,10 +651,14 @@ class Bridge:
         set_automod_config(guild.id, config)
         return await self.automod_get(request)
 
+    async def emit_webhook_event(self, guild_id: int, event_type: str, details: dict[str, Any]):
+        await self.webhooks.emit(guild_id, event_type, details)
+
     def app(self) -> web.Application:
         app = web.Application(middlewares=[self.auth])
         app.router.add_get("/health", self.health)
         app.router.add_get("/api/guilds", self.guilds)
+        self.webhooks.register(app)
         app.router.add_get("/api/guilds/{guild_id}/overview", self.overview)
         app.router.add_get("/api/guilds/{guild_id}/verification", self.verification_get)
         app.router.add_put("/api/guilds/{guild_id}/verification", self.verification_put)
