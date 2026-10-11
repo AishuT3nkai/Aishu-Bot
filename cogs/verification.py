@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -39,6 +40,18 @@ async def run_verification(member: discord.Member, guild: discord.Guild) -> tupl
     return True, "Verification successful. You now have access to the community."
 
 
+async def emit_verified_webhook(member: discord.Member, client: discord.Client, method: str):
+    config = get_guild_config(member.guild.id)
+    bridge = getattr(client, "bridge", None)
+    if not config.get("verification_enabled") or bridge is None:
+        return
+    account_age_days = max(0, (discord.utils.utcnow() - member.created_at).days)
+    asyncio.create_task(bridge.emit_webhook_event(member.guild.id, "member.verified", {
+        "member": {"id": str(member.id), "accountAgeDays": account_age_days},
+        "verification": {"method": method, "result": "passed"},
+    }))
+
+
 class VerificationView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -50,6 +63,8 @@ class VerificationView(discord.ui.View):
             return
 
         passed, message = await run_verification(interaction.user, interaction.guild)
+        if passed:
+            await emit_verified_webhook(interaction.user, interaction.client, "challenge")
         await interaction.response.send_message(message, ephemeral=True)
 
 
@@ -148,7 +163,7 @@ class Verification(commands.Cog):
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message("Use this command inside a server.", ephemeral=True)
             return
-        passed, message = await run_verification(interaction.user, interaction.guild)
+        passed, message = await run_verification(interaction.user, interaction.client, "command")
         await interaction.response.send_message(message, ephemeral=True)
 
     @app_commands.command(name="verificationinfo", description="View public verification information about a member")
