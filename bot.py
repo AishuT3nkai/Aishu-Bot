@@ -61,10 +61,10 @@ class AishuBot(commands.Bot):
 
     async def on_member_join(self, member: discord.Member):
         account_age_days = max(0, (discord.utils.utcnow() - member.created_at).days)
-        await self.bridge.emit_webhook_event(member.guild.id, "member.joined", {
+        asyncio.create_task(self.bridge.emit_webhook_event(member.guild.id, "member.joined", {
             "member": {"id": str(member.id), "accountAgeDays": account_age_days},
             "action": "verification_pending",
-        })
+        }))
 
     async def on_ready(self):
         print(f"Logged in as {self.user} ({self.user.id})")
