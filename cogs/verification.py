@@ -163,7 +163,9 @@ class Verification(commands.Cog):
         if not isinstance(interaction.user, discord.Member):
             await interaction.response.send_message("Use this command inside a server.", ephemeral=True)
             return
-        passed, message = await run_verification(interaction.user, interaction.client, "command")
+        passed, message = await run_verification(interaction.user, interaction.guild)
+        if passed:
+            await emit_verified_webhook(interaction.user, interaction.client, "command")
         await interaction.response.send_message(message, ephemeral=True)
 
     @app_commands.command(name="verificationinfo", description="View public verification information about a member")
