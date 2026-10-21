@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -125,6 +126,12 @@ CREATE TABLE IF NOT EXISTS birthdays (
     month INTEGER NOT NULL,
     day INTEGER NOT NULL,
     PRIMARY KEY (guild_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS dashboard_configs (
+    guild_id INTEGER NOT NULL,
+    config_key TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    PRIMARY KEY (guild_id, config_key)
 );
 """
 
@@ -619,3 +626,39 @@ def remove_reaction_role(guild_id: int, message_id: int, emoji: str) -> bool:
     removed = cursor.rowcount > 0
     connection.close()
     return removed
+
+
+def get_dashboard_config(guild_id: int, key: str, default: Any = None) -> Any:
+    """Read a dashboard setting from the bot's own SQLite database."""
+    connection = connect()
+    try:
+        row = connection.execute(
+            "SELECT config_json FROM dashboard_configs WHERE guild_id = ? AND config_key = ?",
+            (guild_id, key),
+        ).fetchone()
+        if not row:
+            return default
+        try:
+            return json.loads(row["config_json"])
+        except (TypeError, ValueError):
+            return default
+    finally:
+        connection.close()
+
+
+def set_dashboard_config(guild_id: int, key: str, value: Any) -> None:
+    """Persist a dashboard setting where the corresponding bot feature can read it."""
+    connection = connect()
+    try:
+        connection.execute(
+            """
+            INSERT INTO dashboard_configs (guild_id, config_key, config_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, config_key)
+            DO UPDATE SET config_json = excluded.config_json
+            """,
+            (guild_id, key, json.dumps(value, ensure_ascii=False)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
