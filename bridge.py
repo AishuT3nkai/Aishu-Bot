@@ -156,8 +156,8 @@ class Bridge:
 
     @web.middleware
     async def auth(self, request: web.Request, handler):
-        if not self.secret:
-            raise web.HTTPServiceUnavailable(text="Bridge secret is not configured.")
+        if len(self.secret) < 32:
+            raise web.HTTPServiceUnavailable(text="Bridge secret is missing or too short.")
         header = request.headers.get("Authorization", "")
         expected = f"Bearer {self.secret}"
         if not hmac.compare_digest(header, expected):
@@ -772,8 +772,8 @@ class Bridge:
         return app
 
     async def start(self) -> None:
-        if not self.secret:
-            print("Bridge disabled: BOT_API_SHARED_SECRET is missing.")
+        if len(self.secret) < 32:
+            print("Bridge disabled: BOT_API_SHARED_SECRET must contain at least 32 characters.")
             return
         self.runner = web.AppRunner(self.app())
         await self.runner.setup()
