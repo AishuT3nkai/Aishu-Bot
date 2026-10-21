@@ -637,40 +637,63 @@ class Bridge:
             })
         return web.json_response(result)
 
+    def _member_user_id(self, request: web.Request, guild: discord.Guild) -> int:
+        try:
+            user_id = int(request.match_info["user_id"])
+        except (KeyError, TypeError, ValueError):
+            raise web.HTTPBadRequest(text="Invalid user ID.")
+        if user_id <= 0:
+            raise web.HTTPBadRequest(text="Invalid user ID.")
+        if guild.get_member(user_id) is None:
+            raise web.HTTPNotFound(text="Member is not available in this guild.")
+        return user_id
+
+    @staticmethod
+    def _level_for_xp(xp: int) -> int:
+        level = 0
+        while xp >= 100 * (level + 1) * (level + 1):
+            level += 1
+        return level
+
     async def leveling_user_put(self, request: web.Request):
         guild = self._guild(request)
-        user_id = int(request.match_info["user_id"])
+        user_id = self._member_user_id(request, guild)
         data = await self._object_body(request)
-        xp = int(data.get("xp", 0))
-        if xp < 0:
-            raise web.HTTPBadRequest(text="XP cannot be negative.")
+        xp = data.get("xp")
+        if type(xp) is not int or not 0 <= xp <= 1_000_000_000:
+            raise web.HTTPBadRequest(text="XP must be an integer between 0 and 1000000000.")
+        level = self._level_for_xp(xp)
         connection = connect()
-        connection.execute(
-            "INSERT OR IGNORE INTO economy (guild_id, user_id) VALUES (?, ?)",
-            (guild.id, user_id),
-        )
-        connection.execute(
-            "UPDATE economy SET xp = ? WHERE guild_id = ? AND user_id = ?",
-            (xp, guild.id, user_id),
-        )
-        connection.commit()
-        connection.close()
-        return _json(request, ok=True, xp=xp)
+        try:
+            connection.execute(
+                "INSERT OR IGNORE INTO economy (guild_id, user_id) VALUES (?, ?)",
+                (guild.id, user_id),
+            )
+            connection.execute(
+                "UPDATE economy SET xp = ?, level = ? WHERE guild_id = ? AND user_id = ?",
+                (xp, level, guild.id, user_id),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        return _json(request, ok=True, xp=xp, level=level)
 
     async def leveling_user_reset(self, request: web.Request):
         guild = self._guild(request)
-        user_id = int(request.match_info["user_id"])
+        user_id = self._member_user_id(request, guild)
         connection = connect()
-        connection.execute(
-            "INSERT OR IGNORE INTO economy (guild_id, user_id) VALUES (?, ?)",
-            (guild.id, user_id),
-        )
-        connection.execute(
-            "UPDATE economy SET xp = 0, level = 0 WHERE guild_id = ? AND user_id = ?",
-            (guild.id, user_id),
-        )
-        connection.commit()
-        connection.close()
+        try:
+            connection.execute(
+                "INSERT OR IGNORE INTO economy (guild_id, user_id) VALUES (?, ?)",
+                (guild.id, user_id),
+            )
+            connection.execute(
+                "UPDATE economy SET xp = 0, level = 0 WHERE guild_id = ? AND user_id = ?",
+                (guild.id, user_id),
+            )
+            connection.commit()
+        finally:
+            connection.close()
         return _json(request, ok=True)
 
     async def languages(self, request: web.Request):
