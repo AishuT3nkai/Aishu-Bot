@@ -1,17 +1,17 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.database import get_guild_config, update_guild_config
+from utils.database import get_dashboard_config, get_guild_config, update_guild_config
 
 
 def render_message(template: str, member: discord.Member) -> str:
     guild = member.guild
-    return template.format(
-        user=member.mention,
-        username=member.display_name,
-        server=guild.name,
-        member_count=guild.member_count or 0,
-    )
+    return (
+        template.replace("{user}", member.mention)
+        .replace("{username}", member.display_name)
+        .replace("{server}", guild.name)
+        .replace("{member_count}", str(guild.member_count or 0))
+    )[:2000]
 
 
 class Welcome(commands.Cog):
@@ -28,8 +28,14 @@ class Welcome(commands.Cog):
         channel = member.guild.get_channel(config.get(key_channel) or 0)
         if not isinstance(channel, discord.TextChannel):
             return
+        stored = get_dashboard_config(member.guild.id, "welcome", {})
+        template_key = "welcomeMessage" if key_channel == "welcome_channel_id" else "goodbyeMessage"
+        template = stored.get(template_key, default_template) if isinstance(stored, dict) else default_template
         try:
-            await channel.send(render_message(default_template, member))
+            await channel.send(
+                render_message(str(template), member),
+                allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False),
+            )
         except (discord.Forbidden, discord.HTTPException):
             pass
 
@@ -65,11 +71,11 @@ class Welcome(commands.Cog):
             channel = member.guild.get_channel(config.get("goodbye_channel_id") or 0)
             if isinstance(channel, discord.TextChannel):
                 try:
+                    stored = get_dashboard_config(member.guild.id, "welcome", {})
+                    template = stored.get("goodbyeMessage", "Goodbye **{username}**. Thanks for being part of {server}.") if isinstance(stored, dict) else "Goodbye **{username}**. Thanks for being part of {server}."
                     await channel.send(
-                        render_message(
-                            "Goodbye **{username}**. Thanks for being part of {server}.",
-                            member,
-                        )
+                        render_message(str(template), member),
+                        allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False),
                     )
                 except (discord.Forbidden, discord.HTTPException):
                     pass
@@ -98,7 +104,12 @@ class Welcome(commands.Cog):
         if not channel:
             await interaction.response.send_message("Set a welcome channel first with /welcome setup.", ephemeral=True)
             return
-        await channel.send(render_message("Welcome {user} to **{server}**! You are member #{member_count}.", interaction.user))
+        stored = get_dashboard_config(interaction.guild_id, "welcome", {})
+        template = stored.get("welcomeMessage", "Welcome {user} to **{server}**! You are member #{member_count}.") if isinstance(stored, dict) else "Welcome {user} to **{server}**! You are member #{member_count}."
+        await channel.send(
+            render_message(str(template), interaction.user),
+            allowed_mentions=discord.AllowedMentions(users=[interaction.user], roles=False, everyone=False),
+        )
         await interaction.response.send_message("Welcome test sent.", ephemeral=True)
 
     @goodbye.command(name="setup", description="Set the goodbye channel and enable goodbye messages")
@@ -125,7 +136,12 @@ class Welcome(commands.Cog):
         if not channel:
             await interaction.response.send_message("Set a goodbye channel first with /goodbye setup.", ephemeral=True)
             return
-        await channel.send(render_message("Goodbye **{username}**. Thanks for being part of {server}.", interaction.user))
+        stored = get_dashboard_config(interaction.guild_id, "welcome", {})
+        template = stored.get("goodbyeMessage", "Goodbye **{username}**. Thanks for being part of {server}.") if isinstance(stored, dict) else "Goodbye **{username}**. Thanks for being part of {server}."
+        await channel.send(
+            render_message(str(template), interaction.user),
+            allowed_mentions=discord.AllowedMentions(users=[interaction.user], roles=False, everyone=False),
+        )
         await interaction.response.send_message("Goodbye test sent.", ephemeral=True)
 
 
