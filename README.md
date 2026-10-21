@@ -2,6 +2,19 @@
 
 Aishu Bot is a multilingual Discord Community bot focused on moderation, verification, member profiles and server management.
 
+## Private dashboard bridge
+
+The bot starts an authenticated `aiohttp` bridge from its normal startup lifecycle. It serves the dashboard's live configuration and moderation APIs from the bot process, using the bot's existing SQLite database; the Vercel dashboard must never access that database file directly.
+
+Configure these on the bot host:
+- `BOT_API_SHARED_SECRET`: a random secret of at least 32 characters. Generate one with `openssl rand -hex 32`.
+- `BOT_API_HOST`: bind address (default `0.0.0.0` when running behind a private host network).
+- `BOT_API_PORT`: bridge port (default `8080`).
+
+Set the same secret in the dashboard's `BOT_API_SHARED_SECRET` environment variable and set `BOT_API_BASE_URL` to the bridge's private HTTPS URL. Do not expose port 8080 directly to the public internet; use a private network or HTTPS reverse proxy with firewall restrictions. Every bridge route requires the bearer secret. The bridge validates guild membership, channel usability, role hierarchy, request JSON and request size.
+
+Implemented live API families include verification, welcome/goodbye, moderation/warnings, AutoMod, tickets, suggestions, reports, birthday, autorole, leveling, language stats, server settings, and channel/role lookups. Advanced anti-raid policy and webhook management remain dashboard drafts until their full bot-side enforcement and secure delivery requirements are implemented.
+
 ## Supported languages
 
 Member language is personal, not server-wide:
