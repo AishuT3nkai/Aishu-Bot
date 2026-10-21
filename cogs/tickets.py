@@ -1,7 +1,9 @@
+import re
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.database import get_guild_config, update_guild_config
+from utils.database import get_dashboard_config, get_guild_config, update_guild_config
 
 
 async def create_ticket(guild: discord.Guild, member: discord.Member):
@@ -28,10 +30,13 @@ async def create_ticket(guild: discord.Guild, member: discord.Member):
             view_channel=True, send_messages=True, read_message_history=True
         )
 
-    safe_name = "-".join(member.display_name.lower().split())[:70] or "member"
+    stored = get_dashboard_config(guild.id, "tickets", {})
+    pattern = stored.get("namingPattern", "ticket-{username}") if isinstance(stored, dict) else "ticket-{username}"
+    candidate = str(pattern).replace("{username}", member.display_name.lower()).replace("{server}", guild.name.lower())
+    channel_name = re.sub(r"[^a-z0-9_-]+", "-", candidate).strip("-_")[:90] or f"ticket-{member.id}"
     try:
         channel = await category.create_text_channel(
-            name=f"ticket-{safe_name}",
+            name=channel_name,
             overwrites=overwrites,
             topic=f"aishu-ticket:{member.id}",
             reason=f"Ticket opened by {member}",
@@ -60,9 +65,20 @@ class TicketView(discord.ui.View):
             )
             return
         if created:
+            stored = get_dashboard_config(interaction.guild_id, "tickets", {})
+            template = stored.get(
+                "openMessage",
+                "{user}, welcome. Please describe your issue. A support member will help you here.",
+            ) if isinstance(stored, dict) else "{user}, welcome. Please describe your issue. A support member will help you here."
+            content = (
+                str(template)
+                .replace("{user}", interaction.user.mention)
+                .replace("{username}", interaction.user.display_name)
+                .replace("{server}", interaction.guild.name)
+            )[:2000]
             await channel.send(
-                f"{interaction.user.mention}, welcome. Please describe your issue. "
-                "A support member will help you here."
+                content,
+                allowed_mentions=discord.AllowedMentions(users=[interaction.user], roles=False, everyone=False),
             )
             await interaction.response.send_message(f"Ticket created: {channel.mention}", ephemeral=True)
         else:
