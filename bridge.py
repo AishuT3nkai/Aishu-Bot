@@ -247,19 +247,23 @@ class Bridge:
         data = await self._object_body(request)
         welcome_channel = self._validate_id(data.get("welcomeChannelId"), "channel", guild)
         goodbye_channel = self._validate_id(data.get("goodbyeChannelId"), "channel", guild)
-        update_guild_config(
-            guild.id,
-            welcome_enabled=int(bool(data.get("welcomeEnabled"))),
-            welcome_channel_id=_int_or_none(welcome_channel),
-            goodbye_enabled=int(bool(data.get("goodbyeEnabled"))),
-            goodbye_channel_id=_int_or_none(goodbye_channel),
-        )
+        welcome_enabled = data.get("welcomeEnabled")
+        goodbye_enabled = data.get("goodbyeEnabled")
+        if not isinstance(welcome_enabled, bool) or not isinstance(goodbye_enabled, bool):
+            raise web.HTTPBadRequest(text="welcomeEnabled and goodbyeEnabled must be booleans.")
         welcome_message = data.get("welcomeMessage", "Welcome {user} to {server}!")
         goodbye_message = data.get("goodbyeMessage", "Goodbye {user}!")
         if not isinstance(welcome_message, str) or len(welcome_message) > 1800:
             raise web.HTTPBadRequest(text="welcomeMessage must be a string of at most 1800 characters.")
         if not isinstance(goodbye_message, str) or len(goodbye_message) > 1800:
             raise web.HTTPBadRequest(text="goodbyeMessage must be a string of at most 1800 characters.")
+        update_guild_config(
+            guild.id,
+            welcome_enabled=int(welcome_enabled),
+            welcome_channel_id=_int_or_none(welcome_channel),
+            goodbye_enabled=int(goodbye_enabled),
+            goodbye_channel_id=_int_or_none(goodbye_channel),
+        )
         self._set_config(guild.id, "welcome", {
             "welcomeMessage": welcome_message,
             "goodbyeMessage": goodbye_message,
@@ -339,17 +343,17 @@ class Bridge:
         data = await self._object_body(request)
         category = self._validate_id(data.get("categoryId"), "category", guild)
         support = self._validate_id(data.get("supportRoleId"), "role", guild)
-        update_guild_config(
-            guild.id,
-            ticket_category_id=_int_or_none(category),
-            ticket_support_role_id=_int_or_none(support),
-        )
         naming_pattern = data.get("namingPattern", "ticket-{username}")
         open_message = data.get("openMessage", "Thanks for opening a ticket, {user}!")
         if not isinstance(naming_pattern, str) or not 1 <= len(naming_pattern) <= 90:
             raise web.HTTPBadRequest(text="namingPattern must be a string of 1-90 characters.")
         if not isinstance(open_message, str) or len(open_message) > 1800:
             raise web.HTTPBadRequest(text="openMessage must be a string of at most 1800 characters.")
+        update_guild_config(
+            guild.id,
+            ticket_category_id=_int_or_none(category),
+            ticket_support_role_id=_int_or_none(support),
+        )
         self._set_config(guild.id, "tickets", {
             "namingPattern": naming_pattern,
             "openMessage": open_message,
@@ -472,13 +476,13 @@ class Bridge:
         guild = self._guild(request)
         data = await self._object_body(request)
         channel = self._validate_id(data.get("channelId"), "channel", guild)
-        update_guild_config(guild.id, birthday_channel_id=_int_or_none(channel))
         enabled = data.get("enabled")
         announcement_format = data.get("announcementFormat", "🎂 Happy birthday to {user}!")
         if not isinstance(enabled, bool):
             raise web.HTTPBadRequest(text="enabled must be a boolean.")
         if not isinstance(announcement_format, str) or len(announcement_format) > 1800:
             raise web.HTTPBadRequest(text="announcementFormat must be a string of at most 1800 characters.")
+        update_guild_config(guild.id, birthday_channel_id=_int_or_none(channel))
         self._set_config(guild.id, "birthday", {
             "enabled": enabled,
             "announcementFormat": announcement_format,
