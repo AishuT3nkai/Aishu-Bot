@@ -81,10 +81,37 @@ class Bridge:
         connection.commit()
         connection.close()
 
+    async def _json_body(self, request: web.Request) -> Any:
+        try:
+            return await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+            raise web.HTTPBadRequest(text="Request body must be valid JSON.")
+
+    async def _object_body(self, request: web.Request) -> dict[str, Any]:
+        data = await self._json_body(request)
+        if not isinstance(data, dict):
+            raise web.HTTPBadRequest(text="Request body must be a JSON object.")
+        return data
+
+    @web.middleware
+    async def error_responses(self, request: web.Request, handler):
+        try:
+            return await handler(request)
+        except web.HTTPException as error:
+            if error.status < 400:
+                raise
+            message = error.text if error.text and error.text.strip() else error.reason
+            return web.json_response({"error": message}, status=error.status)
+        except Exception as error:
+            print(f"[bridge] Unhandled {type(error).__name__} on {request.method} {request.path}")
+            return web.json_response({"error": "Internal server error."}, status=500)
+
     def _guild(self, request: web.Request) -> discord.Guild:
         try:
             guild_id = int(request.match_info["guild_id"])
         except (KeyError, ValueError):
+            raise web.HTTPBadRequest(text="Invalid guild ID.")
+        if guild_id <= 0:
             raise web.HTTPBadRequest(text="Invalid guild ID.")
         guild = self.bot.get_guild(guild_id)
         if guild is None:
@@ -103,10 +130,28 @@ class Bridge:
             snowflake = int(value)
         except ValueError:
             raise web.HTTPBadRequest(text=f"Invalid {kind} ID.")
-        if kind == "channel" and guild.get_channel(snowflake) is None:
-            raise web.HTTPBadRequest(text=f"Channel {value} is not in this guild.")
-        if kind == "role" and guild.get_role(snowflake) is None:
-            raise web.HTTPBadRequest(text=f"Role {value} is not in this guild.")
+        if kind == "channel":
+            channel = guild.get_channel(snowflake)
+            if not isinstance(channel, discord.TextChannel):
+                raise web.HTTPBadRequest(text=f"Channel {value} must be a text or announcement channel in this guild.")
+            bot_member = guild.me
+            if bot_member is None:
+                raise web.HTTPServiceUnavailable(text="Bot member permissions are not available yet.")
+            permissions = channel.permissions_for(bot_member)
+            if not permissions.view_channel or not permissions.send_messages:
+                raise web.HTTPBadRequest(text=f"The bot cannot use channel {value}.")
+        elif kind == "category":
+            if not isinstance(guild.get_channel(snowflake), discord.CategoryChannel):
+                raise web.HTTPBadRequest(text=f"Category {value} is not in this guild.")
+        elif kind == "role":
+            role = guild.get_role(snowflake)
+            if role is None:
+                raise web.HTTPBadRequest(text=f"Role {value} is not in this guild.")
+            bot_member = guild.me
+            if role.is_default() or role.managed:
+                raise web.HTTPBadRequest(text=f"Role {value} cannot be assigned.")
+            if bot_member is None or role >= bot_member.top_role:
+                raise web.HTTPBadRequest(text=f"Role {value} must be below the bot's highest role.")
         return value
 
     @web.middleware
@@ -170,7 +215,7 @@ class Bridge:
 
     async def verification_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         channel = self._validate_id(data.get("channelId"), "channel", guild)
         verified = self._validate_id(data.get("verifiedRoleId"), "role", guild)
         unverified = self._validate_id(data.get("unverifiedRoleId"), "role", guild)
@@ -199,7 +244,7 @@ class Bridge:
 
     async def welcome_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         welcome_channel = self._validate_id(data.get("welcomeChannelId"), "channel", guild)
         goodbye_channel = self._validate_id(data.get("goodbyeChannelId"), "channel", guild)
         update_guild_config(
@@ -226,7 +271,7 @@ class Bridge:
 
     async def moderation_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         log_channel = self._validate_id(data.get("logChannelId"), "channel", guild)
         mute_role = self._validate_id(data.get("muteRoleId"), "role", guild)
         update_guild_config(guild.id, modlog_channel_id=_int_or_none(log_channel))
@@ -285,8 +330,8 @@ class Bridge:
 
     async def tickets_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
-        category = self._validate_id(data.get("categoryId"), "channel", guild)
+        data = await self._object_body(request)
+        category = self._validate_id(data.get("categoryId"), "category", guild)
         support = self._validate_id(data.get("supportRoleId"), "role", guild)
         update_guild_config(
             guild.id,
@@ -306,7 +351,7 @@ class Bridge:
 
     async def suggestion_config_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         channel = self._validate_id(data.get("channelId"), "channel", guild)
         update_guild_config(guild.id, suggestion_channel_id=_int_or_none(channel))
         return await self.suggestion_config_get(request)
@@ -335,7 +380,7 @@ class Bridge:
             suggestion_id = int(request.match_info["suggestion_id"])
         except ValueError:
             raise web.HTTPBadRequest(text="Invalid suggestion ID.")
-        data = await request.json()
+        data = await self._object_body(request)
         decision = data.get("decision")
         if decision not in {"approved", "denied"}:
             raise web.HTTPBadRequest(text="Decision must be approved or denied.")
@@ -358,7 +403,7 @@ class Bridge:
 
     async def report_config_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         channel = self._validate_id(data.get("channelId"), "channel", guild)
         update_guild_config(guild.id, report_channel_id=_int_or_none(channel))
         return await self.report_config_get(request)
@@ -413,7 +458,7 @@ class Bridge:
 
     async def birthday_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         channel = self._validate_id(data.get("channelId"), "channel", guild)
         update_guild_config(guild.id, birthday_channel_id=_int_or_none(channel))
         self._set_config(guild.id, "birthday", {
@@ -429,7 +474,7 @@ class Bridge:
 
     async def autorole_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         role = self._validate_id(data.get("roleId"), "role", guild)
         update_guild_config(guild.id, autorole_enabled=int(bool(data.get("enabled"))), autorole_id=_int_or_none(role))
         return await self.autorole_get(request)
@@ -450,7 +495,7 @@ class Bridge:
 
     async def leveling_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         if data.get("levelUpChannelId") is not None:
             data["levelUpChannelId"] = self._validate_id(data["levelUpChannelId"], "channel", guild)
         for key in ("excludedChannelIds",):
@@ -466,7 +511,7 @@ class Bridge:
 
     async def level_rewards_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._json_body(request)
         if not isinstance(data, list):
             raise web.HTTPBadRequest(text="Rewards must be an array.")
         for item in data:
@@ -506,7 +551,7 @@ class Bridge:
     async def leveling_user_put(self, request: web.Request):
         guild = self._guild(request)
         user_id = int(request.match_info["user_id"])
-        data = await request.json()
+        data = await self._object_body(request)
         xp = int(data.get("xp", 0))
         if xp < 0:
             raise web.HTTPBadRequest(text="XP cannot be negative.")
@@ -566,7 +611,7 @@ class Bridge:
 
     async def server_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         channel = self._validate_id(data.get("moderationLogChannelId"), "channel", guild)
         prefix = str(data.get("prefix", "/"))
         if not 1 <= len(prefix) <= 5:
@@ -595,7 +640,7 @@ class Bridge:
 
     async def automod_put(self, request: web.Request):
         guild = self._guild(request)
-        data = await request.json()
+        data = await self._object_body(request)
         current = get_automod_config(guild.id)
         allowed = {
             "enabled", "spam_enabled", "duplicate_enabled", "mention_enabled",
@@ -649,10 +694,46 @@ class Bridge:
         set_automod_config(guild.id, config)
         return await self.automod_get(request)
 
+    async def channels(self, request: web.Request):
+        guild = self._guild(request)
+        bot_member = guild.me
+        if bot_member is None:
+            raise web.HTTPServiceUnavailable(text="Bot member permissions are not available yet.")
+        result = []
+        for channel in guild.text_channels:
+            permissions = channel.permissions_for(bot_member)
+            if not permissions.view_channel or not permissions.send_messages:
+                continue
+            result.append({
+                "id": str(channel.id),
+                "name": channel.name,
+                "type": "announcement" if channel.is_news() else "text",
+            })
+        return web.json_response(result)
+
+    async def roles(self, request: web.Request):
+        guild = self._guild(request)
+        bot_member = guild.me
+        if bot_member is None:
+            raise web.HTTPServiceUnavailable(text="Bot member permissions are not available yet.")
+        result = [
+            {
+                "id": str(role.id),
+                "name": role.name,
+                "position": role.position,
+                "managed": role.managed,
+            }
+            for role in sorted(guild.roles, key=lambda item: item.position, reverse=True)
+            if not role.is_default() and not role.managed and role < bot_member.top_role
+        ]
+        return web.json_response(result)
+
     def app(self) -> web.Application:
-        app = web.Application(middlewares=[self.auth])
+        app = web.Application(middlewares=[self.error_responses, self.auth], client_max_size=64 * 1024)
         app.router.add_get("/health", self.health)
         app.router.add_get("/api/guilds", self.guilds)
+        app.router.add_get("/api/guilds/{guild_id}/channels", self.channels)
+        app.router.add_get("/api/guilds/{guild_id}/roles", self.roles)
         app.router.add_get("/api/guilds/{guild_id}/overview", self.overview)
         app.router.add_get("/api/guilds/{guild_id}/verification", self.verification_get)
         app.router.add_put("/api/guilds/{guild_id}/verification", self.verification_put)
