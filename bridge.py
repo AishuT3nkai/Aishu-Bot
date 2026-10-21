@@ -254,9 +254,15 @@ class Bridge:
             goodbye_enabled=int(bool(data.get("goodbyeEnabled"))),
             goodbye_channel_id=_int_or_none(goodbye_channel),
         )
+        welcome_message = data.get("welcomeMessage", "Welcome {user} to {server}!")
+        goodbye_message = data.get("goodbyeMessage", "Goodbye {user}!")
+        if not isinstance(welcome_message, str) or len(welcome_message) > 1800:
+            raise web.HTTPBadRequest(text="welcomeMessage must be a string of at most 1800 characters.")
+        if not isinstance(goodbye_message, str) or len(goodbye_message) > 1800:
+            raise web.HTTPBadRequest(text="goodbyeMessage must be a string of at most 1800 characters.")
         self._set_config(guild.id, "welcome", {
-            "welcomeMessage": str(data.get("welcomeMessage", "")),
-            "goodbyeMessage": str(data.get("goodbyeMessage", "")),
+            "welcomeMessage": welcome_message,
+            "goodbyeMessage": goodbye_message,
         })
         return await self.welcome_get(request)
 
@@ -338,9 +344,15 @@ class Bridge:
             ticket_category_id=_int_or_none(category),
             ticket_support_role_id=_int_or_none(support),
         )
+        naming_pattern = data.get("namingPattern", "ticket-{username}")
+        open_message = data.get("openMessage", "Thanks for opening a ticket, {user}!")
+        if not isinstance(naming_pattern, str) or not 1 <= len(naming_pattern) <= 90:
+            raise web.HTTPBadRequest(text="namingPattern must be a string of 1-90 characters.")
+        if not isinstance(open_message, str) or len(open_message) > 1800:
+            raise web.HTTPBadRequest(text="openMessage must be a string of at most 1800 characters.")
         self._set_config(guild.id, "tickets", {
-            "namingPattern": str(data.get("namingPattern", "ticket-{username}")),
-            "openMessage": str(data.get("openMessage", "")),
+            "namingPattern": naming_pattern,
+            "openMessage": open_message,
         })
         return await self.tickets_get(request)
 
@@ -461,9 +473,15 @@ class Bridge:
         data = await self._object_body(request)
         channel = self._validate_id(data.get("channelId"), "channel", guild)
         update_guild_config(guild.id, birthday_channel_id=_int_or_none(channel))
+        enabled = data.get("enabled")
+        announcement_format = data.get("announcementFormat", "🎂 Happy birthday to {user}!")
+        if not isinstance(enabled, bool):
+            raise web.HTTPBadRequest(text="enabled must be a boolean.")
+        if not isinstance(announcement_format, str) or len(announcement_format) > 1800:
+            raise web.HTTPBadRequest(text="announcementFormat must be a string of at most 1800 characters.")
         self._set_config(guild.id, "birthday", {
-            "enabled": bool(data.get("enabled")),
-            "announcementFormat": str(data.get("announcementFormat", "")),
+            "enabled": enabled,
+            "announcementFormat": announcement_format,
         })
         return await self.birthday_get(request)
 
@@ -546,7 +564,15 @@ class Bridge:
             values = config.get(key)
             if not isinstance(values, list) or len(values) > 100:
                 raise web.HTTPBadRequest(text=f"{key} must be a list of at most 100 IDs.")
-            config[key] = [self._validate_id(value, kind, guild) for value in values]
+            validated = []
+            for value in values:
+                if value is None:
+                    raise web.HTTPBadRequest(text=f"{key} cannot contain empty IDs.")
+                validated_id = self._validate_id(value, kind, guild)
+                if validated_id is None:
+                    raise web.HTTPBadRequest(text=f"{key} cannot contain empty IDs.")
+                validated.append(validated_id)
+            config[key] = validated
         self._set_config(guild.id, "leveling", config)
         return await self.leveling_get(request)
 
@@ -572,6 +598,8 @@ class Bridge:
                 raise web.HTTPBadRequest(text="Each level can have only one reward.")
             levels.add(level)
             role = self._validate_id(item.get("roleId"), "role", guild)
+            if role is None:
+                raise web.HTTPBadRequest(text="Each reward must include a roleId.")
             reward_id = str(item.get("id", role))
             if len(reward_id) > 100:
                 raise web.HTTPBadRequest(text="Reward ID is too long.")
@@ -670,9 +698,9 @@ class Bridge:
         guild = self._guild(request)
         data = await self._object_body(request)
         channel = self._validate_id(data.get("moderationLogChannelId"), "channel", guild)
-        prefix = str(data.get("prefix", "/"))
-        if not 1 <= len(prefix) <= 5:
-            raise web.HTTPBadRequest(text="Prefix must be 1-5 characters.")
+        prefix = data.get("prefix", "/")
+        if not isinstance(prefix, str) or not 1 <= len(prefix) <= 5 or any(char.isspace() for char in prefix):
+            raise web.HTTPBadRequest(text="Prefix must be 1-5 non-whitespace characters.")
         update_guild_config(guild.id, modlog_channel_id=_int_or_none(channel))
         self._set_config(guild.id, "server", {"prefix": prefix})
         return await self.server_get(request)
