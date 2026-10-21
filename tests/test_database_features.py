@@ -17,6 +17,19 @@ class DatabaseFeatureTests(unittest.TestCase):
         database.DB_PATH = self.original_path
         self.temp_dir.cleanup()
 
+    def test_dashboard_config_round_trip_is_guild_scoped(self):
+        database.set_dashboard_config(101, "welcome", {"welcomeMessage": "Hello {user}"})
+        database.set_dashboard_config(202, "welcome", {"welcomeMessage": "Different"})
+        self.assertEqual(
+            database.get_dashboard_config(101, "welcome", {})["welcomeMessage"],
+            "Hello {user}",
+        )
+        self.assertEqual(
+            database.get_dashboard_config(202, "welcome", {})["welcomeMessage"],
+            "Different",
+        )
+        self.assertEqual(database.get_dashboard_config(303, "welcome", {}), {})
+
     def test_per_guild_automod_and_antiraid_configs(self):
         database.set_automod_config(101, {"enabled": True, "keywords": ["example"]})
         database.set_antiraid_config(101, {"enabled": True, "joins": 8})
