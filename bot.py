@@ -3,7 +3,7 @@ import asyncio
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-from utils.database import connect
+from utils.database import connect, get_dashboard_config
 from bridge import Bridge
 
 load_dotenv()
@@ -31,8 +31,12 @@ EXTENSIONS = (
 
 
 def command_prefix(bot: commands.Bot, message: discord.Message):
-    """Use '/' as the only message-command prefix."""
-    return "/"
+    """Read the per-guild message-command prefix configured by the dashboard."""
+    if message.guild is None:
+        return "/"
+    config = get_dashboard_config(message.guild.id, "server", {})
+    prefix = config.get("prefix", "/") if isinstance(config, dict) else "/"
+    return prefix if isinstance(prefix, str) and 1 <= len(prefix) <= 5 else "/"
 
 
 class AishuBot(commands.Bot):
