@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 from datetime import date
-from utils.database import set_birthday, remove_birthday, get_birthday, get_birthdays, get_guild_config, update_guild_config
+from utils.database import get_dashboard_config, set_birthday, remove_birthday, get_birthday, get_birthdays, get_guild_config, update_guild_config
 
 
 class Birthday(commands.Cog):
@@ -77,7 +77,8 @@ class Birthday(commands.Cog):
         for guild in self.bot.guilds:
             config = get_guild_config(guild.id)
             channel = guild.get_channel(config.get("birthday_channel_id") or 0)
-            if not channel:
+            stored = get_dashboard_config(guild.id, "birthday", {})
+            if not channel or (isinstance(stored, dict) and not stored.get("enabled", True)):
                 continue
             # A lightweight duplicate guard: this only runs once per date per process.
             key = f"{guild.id}:{now.isoformat()}"
@@ -86,8 +87,17 @@ class Birthday(commands.Cog):
             rows = get_birthdays(guild.id, now.month, now.day)
             if rows:
                 mentions = [f"<@{row['user_id']}>" for row in rows]
+                template = stored.get("announcementFormat", "🎂 Happy birthday to {user}!") if isinstance(stored, dict) else "🎂 Happy birthday to {user}!"
+                message = str(template).replace("{user}", ", ".join(mentions)).replace("{server}", guild.name)[:2000]
+                allowed_users = [
+                    member for row in rows
+                    if (member := guild.get_member(int(row["user_id"]))) is not None
+                ]
                 try:
-                    await channel.send("🎂 Happy birthday to " + ", ".join(mentions) + "!")
+                    await channel.send(
+                        message,
+                        allowed_mentions=discord.AllowedMentions(users=allowed_users, roles=False, everyone=False),
+                    )
                 except (discord.Forbidden, discord.HTTPException):
                     continue
             self._sent.add(key)
