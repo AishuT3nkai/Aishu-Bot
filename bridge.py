@@ -197,7 +197,7 @@ class Bridge:
             "welcomeEnabled": bool(config.get("welcome_enabled")),
             "goodbyeEnabled": bool(config.get("goodbye_enabled")),
             "ticketsEnabled": bool(self._get_config(guild.id, "tickets", {}).get("enabled", False)),
-            "levelingEnabled": bool(self._get_config(guild.id, "leveling", {}).get("enabled", False)),
+            "levelingEnabled": bool(self._get_config(guild.id, "leveling", {}).get("enabled", True)),
             "openSuggestions": suggestions,
             "openReports": reports,
         })
@@ -481,46 +481,103 @@ class Bridge:
 
     async def leveling_get(self, request: web.Request):
         guild = self._guild(request)
-        return web.json_response(self._get_config(guild.id, "leveling", {
-            "enabled": False,
-            "xpPerMessage": {"min": 10, "max": 20},
+        defaults = {
+            "enabled": True,
+            "xpPerMessage": {"min": 5, "max": 10},
             "xpCooldownSeconds": 60,
             "xpMultiplier": 1,
             "levelUpChannelId": None,
-            "levelUpMessage": "GG {user}, you reached level {level}!",
+            "levelUpMessage": "{user} reached Level {level}!",
             "excludedChannelIds": [],
             "excludedRoleIds": [],
             "antiSpamEnabled": True,
-        }))
+        }
+        stored = self._get_config(guild.id, "leveling", {})
+        if isinstance(stored, dict):
+            defaults.update(stored)
+        defaults["levelUpChannelId"] = self._id(defaults.get("levelUpChannelId"))
+        defaults["excludedChannelIds"] = [str(value) for value in defaults.get("excludedChannelIds", [])]
+        defaults["excludedRoleIds"] = [str(value) for value in defaults.get("excludedRoleIds", [])]
+        return web.json_response(defaults)
 
     async def leveling_put(self, request: web.Request):
         guild = self._guild(request)
         data = await self._object_body(request)
-        if data.get("levelUpChannelId") is not None:
-            data["levelUpChannelId"] = self._validate_id(data["levelUpChannelId"], "channel", guild)
-        for key in ("excludedChannelIds",):
-            data[key] = [self._validate_id(value, "channel", guild) for value in data.get(key, [])]
-        for key in ("excludedRoleIds",):
-            data[key] = [self._validate_id(value, "role", guild) for value in data.get(key, [])]
-        self._set_config(guild.id, "leveling", data)
+        current = self._get_config(guild.id, "leveling", {})
+        config = {
+            "enabled": True,
+            "xpPerMessage": {"min": 5, "max": 10},
+            "xpCooldownSeconds": 60,
+            "xpMultiplier": 1,
+            "levelUpChannelId": None,
+            "levelUpMessage": "{user} reached Level {level}!",
+            "excludedChannelIds": [],
+            "excludedRoleIds": [],
+            "antiSpamEnabled": True,
+        }
+        if isinstance(current, dict):
+            config.update(current)
+        config.update(data)
+
+        if not isinstance(config.get("enabled"), bool) or not isinstance(config.get("antiSpamEnabled"), bool):
+            raise web.HTTPBadRequest(text="enabled and antiSpamEnabled must be booleans.")
+        xp_range = config.get("xpPerMessage")
+        if not isinstance(xp_range, dict):
+            raise web.HTTPBadRequest(text="xpPerMessage must contain min and max.")
+        minimum, maximum = xp_range.get("min"), xp_range.get("max")
+        if type(minimum) is not int or type(maximum) is not int or not 0 <= minimum <= maximum <= 100:
+            raise web.HTTPBadRequest(text="XP range must use integers between 0 and 100 with max >= min.")
+        cooldown = config.get("xpCooldownSeconds")
+        if type(cooldown) is not int or not 0 <= cooldown <= 3600:
+            raise web.HTTPBadRequest(text="xpCooldownSeconds must be an integer between 0 and 3600.")
+        try:
+            multiplier = float(config.get("xpMultiplier"))
+        except (TypeError, ValueError):
+            raise web.HTTPBadRequest(text="xpMultiplier must be a number between 0.1 and 10.")
+        if not 0.1 <= multiplier <= 10:
+            raise web.HTTPBadRequest(text="xpMultiplier must be a number between 0.1 and 10.")
+        config["xpMultiplier"] = multiplier
+        message = config.get("levelUpMessage")
+        if not isinstance(message, str) or len(message) > 500:
+            raise web.HTTPBadRequest(text="levelUpMessage must be a string of at most 500 characters.")
+        channel_id = config.get("levelUpChannelId")
+        config["levelUpChannelId"] = self._validate_id(channel_id, "channel", guild) if channel_id else None
+        for key, kind in (("excludedChannelIds", "channel"), ("excludedRoleIds", "role")):
+            values = config.get(key)
+            if not isinstance(values, list) or len(values) > 100:
+                raise web.HTTPBadRequest(text=f"{key} must be a list of at most 100 IDs.")
+            config[key] = [self._validate_id(value, kind, guild) for value in values]
+        self._set_config(guild.id, "leveling", config)
         return await self.leveling_get(request)
 
     async def level_rewards_get(self, request: web.Request):
         guild = self._guild(request)
-        return web.json_response(self._get_config(guild.id, "level_rewards", []))
+        stored = self._get_config(guild.id, "level_rewards", [])
+        return web.json_response(stored if isinstance(stored, list) else [])
 
     async def level_rewards_put(self, request: web.Request):
         guild = self._guild(request)
         data = await self._json_body(request)
-        if not isinstance(data, list):
-            raise web.HTTPBadRequest(text="Rewards must be an array.")
+        if not isinstance(data, list) or len(data) > 100:
+            raise web.HTTPBadRequest(text="Rewards must be an array of at most 100 items.")
+        levels = set()
+        cleaned = []
         for item in data:
             if not isinstance(item, dict):
-                raise web.HTTPBadRequest(text="Invalid reward.")
+                raise web.HTTPBadRequest(text="Each reward must be an object.")
+            level = item.get("level")
+            if type(level) is not int or not 1 <= level <= 10000:
+                raise web.HTTPBadRequest(text="Reward level must be an integer between 1 and 10000.")
+            if level in levels:
+                raise web.HTTPBadRequest(text="Each level can have only one reward.")
+            levels.add(level)
             role = self._validate_id(item.get("roleId"), "role", guild)
-            item["roleId"] = role
-        self._set_config(guild.id, "level_rewards", data)
-        return web.json_response(data)
+            reward_id = str(item.get("id", role))
+            if len(reward_id) > 100:
+                raise web.HTTPBadRequest(text="Reward ID is too long.")
+            cleaned.append({"id": reward_id, "level": level, "roleId": role})
+        self._set_config(guild.id, "level_rewards", cleaned)
+        return web.json_response(cleaned)
 
     async def leveling_users_get(self, request: web.Request):
         guild = self._guild(request)
